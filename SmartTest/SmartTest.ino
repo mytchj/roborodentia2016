@@ -1,527 +1,136 @@
-#include <Math.h>
-#include <Servo.h>
-#include <AFMotor.h>
-#include "HMotor.h"
+// Robot Localization via sonar
+#include <Arduino.h>
+#include "NewPing.h"
 #include "Location.h"
 #include "config.h"
 
-// Motor & Servo Globals
-Servo hservo[2];
-Servo cservo[3];
-AF_DCMotor motor1(4);
-AF_DCMotor motor2(2);
-AF_DCMotor motor3(3);
-AF_DCMotor *slide[SERVOCOUNT] = {&motor1, &motor2, &motor3};
-
-static int startTime;
-static uint8_t distance[SONAR_NUM]; 
-static boolean* ir; //[IRCOUNT];    
-static uint8_t clampStatus[SERVOCOUNT] = {OPEN, OPEN, OPEN};
-
-// Usage example
-  //distance = Location::updateSonar();
-  //ir = Location::updateInfrared();
-  
+// IRsensors
+static const int irRead[IRCOUNT] = {A0, A1, A2, A3, A4, A5};
+int Location::irRaw[IRCOUNT];
+boolean Location::ir[IRCOUNT];
 
 #if DEBUG_ENABLED
-static bool joyStickEnabled = false;
-static int* joyXYB; //[JOYCOUNT];
-static char incomingByte;
-#endif 
-
-
-HMotor hmotor1(39, 38, 2);
-HMotor hmotor2(40, 41, 45);
-HMotor hmotor3(51, 50, 46);
-HMotor hmotor4(49, 48, 44);
-HMotor *hm[MOTORCOUNT] = {&hmotor1, &hmotor2, &hmotor3, &hmotor4};
-
-void setup() {
-#if DEBUG_ENABLED
-  Serial.begin(115200);           // set up Serial library at 9600 bps
-  Serial.println("Initializing");
+static const int joystick[JOYCOUNT] = {A8, A9, A7};
+int Location::joyXYB[JOYCOUNT];
 #endif
 
-  pinMode(BUTTONPIN, INPUT);
-  pinMode(LEDPIN, OUTPUT);
-  Location::Init();
+// Points of Interest
+locationCoordinates myLoc = {0, 0};
+static const locationCoordinates pickupPegs[2] = {{0, TWOFEET}, {0, TWOFEET}};
+static const locationCoordinates scoringPegs[2] = {{FOURFEET, 0}, {-FOURFEET, 0}};
+static const locationCoordinates barrier = {-TWOFEET, 0};
 
-  //while (!digitalRead(BUTTONPIN));
 
-  startTime = millis();
+// Static Variables
+uint8_t Location::cm[SONAR_NUM];         // Where the ping distances are stored.
+NewPing Location::sonar[SONAR_NUM] = {
+  NewPing(22, 23, MAX_DISTANCE), // trig, echo
+  NewPing(24, 25, MAX_DISTANCE),
+  NewPing(26, 27, MAX_DISTANCE),
+  NewPing(28, 29, MAX_DISTANCE)
+};
   
-  lift(1, RELEASE);
-  lift(0, RELEASE);
-  lift(2, RELEASE);
+void Location::Init(void) {
+#if DEBUG_ENABLED
+  // Joystick Controls
+  for (int i = 0; i < JOYCOUNT; i++)
+    pinMode(joystick[i], INPUT);  
+#endif
+
+  // IR Sensors
+  for (int i = 0; i < IRCOUNT; i++)
+    pinMode(irRead[i], INPUT);
+}
+
+uint8_t* Location::updateSonar(void) {
+  for (uint8_t i = 0; i < SONAR_NUM; i++) // Loop through all the sensors.
+    cm[i] = sonar[i].ping() / US_ROUNDTRIP_CM;
+  return (uint8_t*)cm;
+}
+
+boolean* Location::updateInfrared() {
+  for (int i = 0; i < IRCOUNT; i++)
+    ir[i] = irMap(irRaw[i] = analogRead(irRead[i]));
+  return ir;
+}
+
+bool Location::irMap(int luminosity) {
+  if (luminosity > 800)
+    return true;
+  return false;
+}
 
 #if DEBUG_ENABLED
-  Serial.println("Initialized");
-#endif
-}
 
-void loop() {
-  if (digitalRead(BUTTONPIN) && millis() - startTime > 10000) {    
-    #if DEBUG_ENABLED
-      Serial.println("Restarting");
-    #endif
-    restart();
-  }
-  if (millis() - startTime > 179000) // Stop 1 second shy of 3 minutes
-    endMatch();
-
-#if DEBUG_ENABLED
-
-  if (joyStickEnabled) {
-    joyXYB = Location::updateJoystick();
-    joyStickDrive();
-  }
-  
-  if (serialRead())
-    serialDo();
-
-#else
-
-
-dirDrive(XDIR, BACKWARD, FULL_SPEED);
-delay(500);
-
-dirDrive(XDIR, BACKWARD, HALF_SPEED);
-delay(500);
-
-dirDrive();
-delay(500);
-
-dirDrive(XDIR, FORWARD, FULL_SPEED);
-delay(500);
-
-dirDrive(XDIR, FORWARD, HALF_SPEED);
-delay(500);
-  
-#endif
-    
-
-}
-
-void restart() {
-  asm volatile("  jmp 0");
-}
-
-void endMatch() {
-  #if DEBUG_ENABLED
-    Serial.println("Alert: Match Over");
-  #endif
-  dirDrive();
-  hservoDetach();
-  for (;;) {
-    toggleLED();
-    if (digitalRead(BUTTONPIN)) {    
-    #if DEBUG_ENABLED
-      Serial.println("Alert: Restarting");
-    #endif
-    restart();
-  }
-  }
-}
-
-void hump(int direction) {
-  if (direction < BRAKE) {
-    hservoAttach();
-    hservo[(direction + 1) % 2].writeMicroseconds(1300);
-    hservo[direction % 2].writeMicroseconds(1700); 
-  } else {
-    hservoDetach();
-  }
-}
-
-void lift(uint8_t selector, uint8_t pos) {
-  slide[selector]->setSpeed(FULL_SPEED);
-  slide[selector]->run(pos);
-  if (pos == RELEASE)
-    slide[selector]->setSpeed(FULL_SPEED);
-}
-
-// select state manually
-void clamp(uint8_t selector, uint8_t state) {
-  if (state == CLOSE) {
-    cservoAttach(selector);
-    cservo[selector].write(0);
-    clampStatus[selector] = CLOSE;
-  } else if (state == OPEN) {
-    cservoAttach(selector);
-    cservo[selector].write(90);
-    clampStatus[selector] = OPEN;
-  } else if (state == STOP) {
-    cservoDetach(selector);
-    clampStatus[selector] = STOP;
-  }
-}
-
-void cservoAttach(uint8_t selector) {
-  if (selector == 0)
-    cservo[0].attach(9);
-  else if (selector == 1)
-    cservo[1].attach(10);
-  else if (selector == 2)
-    cservo[2].attach(13);
-}
-
-void cservoAttach() {
-  cservoAttach(0);
-  cservoAttach(1);
-  cservoAttach(2);
-}
-
-void cservoDetach(uint8_t selector) {
-  cservo[selector].detach();
-}
-
-void cservoDetach() {
-  cservoDetach(0);
-  cservoDetach(1);
-  cservoDetach(2);
-}
-
-void hservoAttach() {
-  hservo[0].attach(40);
-  hservo[1].attach(41);
-}
-
-void hservoDetach() {
-  hservo[0].detach();
-  hservo[1].detach();
-}
-
-void avoidDrive(uint8_t* dist) {
-  for (int i = 0; i < MOTORCOUNT / 2; i++)                                                                                                                                          
-    if((dist[i]) < 5 && (dist[i] > 1)) {
-      hm[(i + MOTORCOUNT + 1) % MOTORCOUNT]->drive(FULL_SPEED, FORWARD);
-      hm[(i + MOTORCOUNT - 1) % MOTORCOUNT]->drive(FULL_SPEED, FORWARD);
-    } else {
-      hm[(i + MOTORCOUNT + 1) % MOTORCOUNT]->drive(0, RELEASE);
-      hm[(i + MOTORCOUNT - 1) % MOTORCOUNT]->drive(0, RELEASE);
+void Location::printSonar() {
+  Location::updateSonar();
+  Serial.print("SONAR: ");
+  for (uint8_t i = 0; i < SONAR_NUM; i++) {
+    if (cm[i] != NO_ECHO) {
+      Serial.print(i);
+      Serial.print("=");
+      Serial.print(cm[i]);
+      Serial.print("cm ");
     }
-}
-
-void spinDrive(int degrees, bool direction) {
-  hm[0]->drive(FULL_SPEED, direction ? FORWARD : BACKWARD);                    
-  hm[1]->drive(FULL_SPEED, direction ? FORWARD : BACKWARD);
-  hm[2]->drive(FULL_SPEED, direction ? BACKWARD : FORWARD);
-  hm[3]->drive(FULL_SPEED, direction ? BACKWARD : FORWARD);
-  
-  delay(degrees);
-  for (int i = 0; i < MOTORCOUNT; i++) {
-    hm[i]->drive(0, RELEASE);
-  }
-}
-
-void singleDrive(uint8_t num, uint8_t direction) {
-  hm[num]->drive(FULL_SPEED, direction);
-}
-
-void singleDrive(uint8_t num, uint8_t direction, uint8_t speed) {
-  hm[num]->drive(speed, direction);
-}
-
-void dirDrive(bool axis, uint8_t direction, uint8_t speed) {
-  hm[axis ? 0 : 1]->drive(speed, direction);
-  hm[axis ? 2 : 3]->drive(speed, direction);
-}
-
-void dirDrive(bool axis, uint8_t direction) {
-  hm[axis ? 0 : 1]->drive(FULL_SPEED, direction);
-  hm[axis ? 2 : 3]->drive(FULL_SPEED, direction);
-}
-
-void dirDrive(bool axis) {
-  hm[axis ? 0 : 1]->drive(0, RELEASE);
-  hm[axis ? 2 : 3]->drive(0, RELEASE);
-}
-
-void dirDrive() {
-  hm[0]->drive(0, RELEASE);
-  hm[1]->drive(0, RELEASE);
-  hm[2]->drive(0, RELEASE);
-  hm[3]->drive(0, RELEASE);
-}
-
-#if DEBUG_ENABLED
-
-void joyStickDrive() {
-  for (int i = 0; i < MOTORCOUNT; i++)                                                                                                                                          
-    hm[i]->drive(abs(abs(joyXYB[i%2]) - 1), Location::joystickDirection(joyXYB[i%2]));
-}
-
-bool serialRead() {
-  incomingByte = 0;
-  if (Serial.available() > 0) {
-    // read the incoming byte:
-    incomingByte = Serial.read();
-
-    Serial.print("I received: ");
-    Serial.println(incomingByte);
-  }
-  return incomingByte;
-}
-#endif
-
-void wheelSpeedTest() {
-  for (int i = 255; i > 0; i--) {
-    dirDrive(YDIR, FORWARD, i);
-    delay(10);
-  }
-  for (int i = 0; i < 255; i++) {
-    dirDrive(YDIR, BACKWARD, i); 
-    delay(10);
-  }
-  dirDrive(YDIR, RELEASE); 
-
-  for (int i = 255; i > 0; i--) {
-    dirDrive(XDIR, FORWARD, i);
-    delay(10);
-  }
-  for (int i = 0; i < 255; i++) {
-    dirDrive(XDIR, BACKWARD, i); 
-    delay(10);
-  }
-  dirDrive(XDIR, RELEASE); 
-
-}
-
-void toggleLED() {
-  static int status = LOW;
-  digitalWrite(LEDPIN, status = !status);
-}
-
-void withdraw() {
-  // Get out of the way of middle clamp
-  clamp(0, CLOSE);
-  clamp(2, CLOSE);
-
-  //Grab middle
-  clamp(1, CLOSE);
-  delay(100);
-  lift(1, FORWARD);
-
-  
-  lift(0, BACKWARD);
-  lift(2, BACKWARD);
-  clamp(0, OPEN);
-  clamp(2, OPEN);
-  delay(1000);
-  clamp(0, CLOSE);
-  clamp(2, CLOSE);
-  delay(100);
-  lift(0, FORWARD);
-  lift(2, FORWARD);
-  
-  
-}
-
-void deposit() {
-  
-}
-
-void laps(uint8_t numberOfLaps) {
-  while (numberOfLaps--) {
-    updateSonar();
-    sonarDrive(XDIR, FORWARD);
-    withdraw();
-    sonarDrive(XDIR, FORWARD); 
-    deposit();
-  }
-}
-
-void testLift() {
-  uint8_t i = 0;
-  while (i < POTCOUNT) {
-    lift(i, FORWARD);
-    delay(2000);
-    lift(i, RELEASE);
-    delay(2000);
-    lift(i, BACKWARD);
-    delay(2000);
-    lift(i, RELEASE);
-    delay(2000);
-    i++;
-  }
-  
-}
-
-#if DEBUG_ENABLED
-
-void serialDo() {
-  switch (incomingByte) {
-    case '`': hump(FORWARD);      break;
-    case '1': hump(BACKWARD);     break;
-    case '2': hump(BRAKE);        break;
-    case '6': testLift();         break;
-    case '9': laps(1);             break;
-    case '0': laps(10);             break;
-
-    case 'a': clamp(1, OPEN);            break;
-    case 's': clamp(1, CLOSE);            break;
-    case 'd': clamp(1, STOP);            break;
-    
-    case 'z': Location::printInfrared();            break;
-    case 'x': Location::printRawInfrared();         break;
-    case 'c': Location::printSonar();               break;
-    case 'v': updateSonar();               break;
-
-    
-    case 'q': followLines(FORWARD);                        break;
-    case 'w': followLines(BACKWARD);                        break;
-    case '[': spinDrive(175, true);              break;
-    case ']': spinDrive(175, false);              break;
-    case 'r': sonarDrive(XDIR, FORWARD);              break;
-    case 't': sonarDrive(XDIR, BACKWARD);              break;
-    
-    case 'y': sonarDrive(YDIR, FORWARD);              break;
-    case 'u': sonarDrive(YDIR, BACKWARD);              break;
-    case 'p': dirDrive(XDIR, FORWARD, FULL_SPEED);  break;
-
-  }
-}
-
-void toggleJoystickControl() {
-  joyStickEnabled = !joyStickEnabled;
-}
-#endif
-
-
-void followLines(uint8_t dir) {
-  int i = 1000;
-  dirDrive();
-  
-  while(i--) {
-    ir = Location::updateInfrared();
-    if (ir[0] | ir[1] | ir[2]) { // Any of the front are on
-      if ((!ir[0] | !ir[2]) & ir[1])
-        dirDrive(XDIR, dir, HALF_SPEED);
-      else if (ir[0])
-        singleDrive(2, DRIVE, SLOW_SPEED);
-      else if (ir[2])
-        singleDrive(2, REVERSE, SLOW_SPEED);
-      else {
-        dirDrive();
-        Serial.println("Illegal state detected");
-      }
-    }
-    if (ir[3] | ir[4] | ir[5]) { // Any of the front are on
-      if ((!ir[3] | !ir[4]) & ir[5])
-        dirDrive(XDIR, dir, HALF_SPEED);
-      else if (ir[3]){
-        singleDrive(0, REVERSE, FULL_SPEED);
-        Serial.println("HEY TURN!");
-      }
-      else if (ir[5]){
-        singleDrive(0, DRIVE, FULL_SPEED);        
-        Serial.println("HEY TURN!");
-      }
-      else {
-        dirDrive();
-        Serial.println("Illegal state detected");
-      }
-    }
-    else 
-      dirDrive(XDIR, DRIVE, SLOW_SPEED); //otherwise stop
-      delay(1);
-  }
-  dirDrive(); //stop when done
-}
-
-void updateSonar() {
-  int tempDistanceArr[SONAR_AVERAGING_PRECISION][SONAR_NUM] =  {};
-  uint8_t* tempDistance;
-  int avgDistance1[SONAR_NUM] = {};
-  int avgDistance2[SONAR_NUM] = {};
-  uint8_t numGoodReadings[SONAR_NUM] = {};
-
-  // Take multiple readings
-  for (uint8_t i = 0; i < SONAR_AVERAGING_PRECISION; i++) {
-    tempDistance = Location::updateSonar();
-    for (uint8_t j = 0; j < SONAR_NUM; j++)
-      avgDistance1[j] += tempDistanceArr[i][j] = tempDistance[j];
-  }
-
-  // Average those readings
-  for (uint8_t j = 0; j < SONAR_NUM; j++) {
-    avgDistance1[j] /= SONAR_AVERAGING_PRECISION;
-  }
-
-  // Throw away outlier readings
-  for (uint8_t i = 0; i < SONAR_AVERAGING_PRECISION; i++) {
-    for (uint8_t j = 0; j < SONAR_NUM; j++) {
-      if (tempDistanceArr[i][j] > avgDistance1[j] + FUDGING_DISTANCE)
-        tempDistanceArr[i][j] = -1;
-      else if (tempDistanceArr[i][j] < avgDistance1[j] - FUDGING_DISTANCE)
-        tempDistanceArr[i][j] = -1;
-      else
-        numGoodReadings[j]++;
-    }
-  }
-
-  // Tabulate the remaining readings for the final answer
-  for (uint8_t i = 0; i < SONAR_AVERAGING_PRECISION; i++)
-    for (uint8_t j = 0; j < SONAR_NUM; j++)
-      if (tempDistanceArr[i][j] != -1)
-        avgDistance2[j] += tempDistanceArr[i][j];
-
-  // Average those corrected readings
-  for (uint8_t j = 0; j < SONAR_NUM; j++) {
-    if (numGoodReadings[j] > 0)
-      distance[j] = avgDistance2[j] / numGoodReadings[j];
-    else
-      distance[j] = 0;
-    Serial.print(distance[j]);
-    Serial.print(".");
-    Serial.print(avgDistance2[j]);
-    Serial.print("\t");
   }
   Serial.println();
-  
 }
 
-void sonarDrive(int axis, int dir) {
-  dirDrive();
-  updateSonar();
-  while (distance[axis + (dir - 1) * 2] > 1) { // Any of the front are on
-    if (distance[axis + (dir - 1) * 2] > 5)
-      dirDrive(axis, dir, FULL_SPEED);
-    else
-      dirDrive(axis, dir, HALF_SPEED);
-    updateSonar();
-  }
-  dirDrive(); //stop when done
+void Location::printInfrared() {
+  Location::updateInfrared();
+  Serial.println("INFRARED: ");
+  Serial.print("[");
+  Serial.print((ir[0]) ? "#" : "_");
+  Serial.print((ir[1]) ? "#" : "_");
+  Serial.print((ir[2]) ? "#" : "_");
+  Serial.println("]");
+
+  Serial.print("[");
+  Serial.print((ir[3]) ? "#" : "_");
+  Serial.print((ir[4]) ? "#" : "_");
+  Serial.print((ir[5]) ? "#" : "_");
+  Serial.println("]");
 }
 
-void updateLocation() {
-  updateSonar();
-  
-  // TODO this code incorrectly assumes a certain orientation
-  // because the robot turns, the coordinate space will become shifted, dislocating fixed points
-  Location::myLoc.x = distance[0] - distance[2];
-  Location::myLoc.y = distance[1] - distance[3];
+void Location::printRawInfrared() {
+  Location::updateInfrared();
+  Serial.println("Raw INFRARED: ");
+  Serial.print("[");
+  Serial.print(irRaw[0]);  Serial.print("\t");
+  Serial.print(irRaw[1]);  Serial.print("\t");
+  Serial.print(irRaw[2]);  Serial.print("\t");
+  Serial.println("]");
+
+  Serial.print("[");
+  Serial.print(irRaw[3]);  Serial.print("\t");
+  Serial.print(irRaw[4]);  Serial.print("\t");
+  Serial.print(irRaw[5]);  Serial.print("\t");
+  Serial.println("]");
 }
 
-uint8_t moveTo(locationCoordinates toLoc) {
-  updateLocation();
-  dirDrive(); //stop when done
-  
-  while (XCLOSE() || YCLOSE()) {
-    if (XCLOSE())
-      dirDrive(XDIR, Location::myLoc.x > toLoc.x);
-    else
-      dirDrive(XDIR);
-      
-    if (YCLOSE())
-      dirDrive(YDIR, Location::myLoc.y > toLoc.y);
-    else
-      dirDrive(YDIR);
-      
-    updateLocation();
-  }
-  dirDrive(); //stop when done
-  
-  return 0;
+uint8_t Location::joystickDirection(int num) {
+  if (num > DEADZONE)
+    return FORWARD;
+  if (num < -DEADZONE)
+    return BACKWARD;
+  return BRAKE;
 }
 
+int* Location::updateJoystick() {
+  for (int i = 0; i < JOYCOUNT; i++)
+    joyXYB[i] = (analogRead(joystick[i]) - 512)/2;
+  return joyXYB;
+}
+
+void Location::printJoystickPosition() {
+  Serial.print("Joy: ");
+  Serial.print("X = ");
+  Serial.print(joyXYB[0]);
+  Serial.print(" Y = ");
+  Serial.print(joyXYB[1]);
+  Serial.print(" B = ");
+  Serial.print(joyXYB[2]);
+  Serial.println(); 
+}
+
+#endif
