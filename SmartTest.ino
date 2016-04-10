@@ -215,17 +215,17 @@ void singleDrive(uint8_t num, uint8_t direction) {
   hm[num]->drive(FULL_SPEED, direction);
 }
 
-void singleDrive(uint8_t num, uint8_t direction, uint8_t speed) {
-  hm[num]->drive(speed, direction);
+void singleDrive(uint8_t num, uint8_t dir, uint8_t speed) {
+  hm[num]->drive(speed, dir);
 }
 
-void dirDrive(bool axis, uint8_t direction, uint8_t speed) {
-  hm[axis ? 0 : 1]->drive(speed, direction);
-  hm[axis ? 2 : 3]->drive(speed, direction);
+void dirDrive(bool axis, uint8_t dir, uint8_t speed) {
+  hm[axis ? 0 : 1]->drive(speed, dir);
+  hm[axis ? 2 : 3]->drive(speed, dir);
 }
 
-void dirDrive(bool axis, uint8_t direction) {
-  dirDrive(axis, direction, FULL_SPEED);
+void dirDrive(bool axis, uint8_t dir) {
+  dirDrive(axis, dir, FULL_SPEED);
 }
 
 void dirDrive(bool axis) {
@@ -237,6 +237,21 @@ void dirDrive() {
   hm[1]->drive(0, RELEASE);
   hm[2]->drive(0, RELEASE);
   hm[3]->drive(0, RELEASE);
+}
+
+void turnDrive(uint8_t dir) {
+  if (dir == FRONTLEFT) {
+    hm[1]->drive(FULL_SPEED, FORWARD);
+    hm[2]->drive(HALF_SPEED, BACKWARD);
+    hm[3]->drive(HALF_SPEED, FORWARD);
+  }
+  else if (dir == FRONTRIGHT) {
+    hm[1]->drive(HALF_SPEED, FORWARD);
+    hm[2]->drive(HALF_SPEED, FORWARD);
+    hm[3]->drive(FULL_SPEED, FORWARD);
+  }
+  delay(1500);
+  dirDrive();
 }
 
 #if DEBUG_ENABLED
@@ -316,6 +331,14 @@ void deposit() {
   
 }
 
+void game() {
+  turnDrive(FRONTRIGHT);
+  delay(1234);
+  followLines(FORWARD, FRONTLEFT | BACKLEFT);
+
+  
+}
+
 void laps(uint8_t numberOfLaps) {
   while (numberOfLaps--) {
     Serial.println("FollowForward");
@@ -368,6 +391,7 @@ void serialDo() {
     case 'v': updateSonar();               break;
 
     case 'm': singleDrive(0, FORWARD, SLOW_SPEED + 60); break;  
+	case 'n': game(); break;  
     
     case 'q': followLines(FORWARD, 0);                        break;
     case 'w': followLines(BACKWARD, 0);                        break;
@@ -387,6 +411,10 @@ void toggleJoystickControl() {
   joyStickEnabled = !joyStickEnabled;
 }
 #endif
+
+void followLines(uint8_t dir) {
+  followLines(dir, 0);
+}
 
 // Runs the front and back
 void followLines(uint8_t dir, int irSave) {
