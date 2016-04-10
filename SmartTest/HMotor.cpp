@@ -17,11 +17,11 @@
   };
   
   void HMotor::drive(uint8_t speed, uint8_t direction) {
-    if (direction == FORWARD) {
+    if (direction == BACKWARD) {
       digitalWrite(a, HIGH);
       digitalWrite(b, LOW);
     }
-    else if (direction == BACKWARD) {
+    else if (direction == FORWARD) {
       digitalWrite(a, LOW);
       digitalWrite(b, HIGH);
     }

@@ -224,13 +224,11 @@ void dirDrive(bool axis, uint8_t direction, uint8_t speed) {
 }
 
 void dirDrive(bool axis, uint8_t direction) {
-  hm[axis ? 0 : 1]->drive(FULL_SPEED, direction);
-  hm[axis ? 2 : 3]->drive(FULL_SPEED, direction);
+  dirDrive(axis, direction, FULL_SPEED);
 }
 
 void dirDrive(bool axis) {
-  hm[axis ? 0 : 1]->drive(0, RELEASE);
-  hm[axis ? 2 : 3]->drive(0, RELEASE);
+  dirDrive(axis, RELEASE);
 }
 
 void dirDrive() {
@@ -370,8 +368,8 @@ void serialDo() {
 
     case 'm': singleDrive(0, FORWARD, SLOW_SPEED + 60); break;  
     
-    case 'q': followLines(FORWARD, 0);                        break;
-    case 'w': followLines(BACKWARD, 0);                        break;
+    case 'q': followLines(FORWARD);                        break;
+    case 'w': followLines(BACKWARD);                        break;
     case '[': spinDrive(175, true);              break;
     case ']': spinDrive(175, false);              break;
     case 'r': sonarDrive(XDIR, FORWARD);              break;
@@ -390,17 +388,14 @@ void toggleJoystickControl() {
 #endif
 
 
-
-// Runs the front and back
-void followLines(uint8_t dir, int irSave) {
-  int i = 5000;
+void followLines(uint8_t dir) {
+  int i = 1000;
+  int irSave = 0;
   dirDrive(XDIR, dir, HALF_SPEED);
   while(i--) {
     ir = Location::updateInfrared();
-
-    //THIS CHECKS THE FRONT IR's
     if (ir[0] | ir[1] | ir[2]) { // Any of the front are on
-      if (ir[1])
+      if (ir[1])//(!ir[0] | !ir[2]) & ir[1] | (ir[0] & ir[1] & ir[2]))
         dirDrive(XDIR, dir, HALF_SPEED);
       else if (ir[0]){
         singleDrive(2, FORWARD , SLOW_SPEED); //dir == FORWARD ? FORWARD : BACKWARD
@@ -417,19 +412,18 @@ void followLines(uint8_t dir, int irSave) {
       }
     }
     else{
+      //Serial.println("SAVE FRONT!!!");
       if(irSave & FRONTLEFT)
         singleDrive(2, FORWARD, MEH_SPEED);
-      else if(irSave & FRONTRIGHT)
+      else
         singleDrive(2, BACKWARD, MEH_SPEED);
-      else{
-        dirDrive();
-      }   
-      dirDrive(XDIR, dir, HALF_SPEED); //otherwise stop
+        
+      dirDrive(XDIR, DRIVE, SLOW_SPEED); //otherwise stop
+      delay(1);
     }
-
-    //THIS CHECKS THE BACK IR's
+      
     if (ir[3] | ir[4] | ir[5]) { // Any of the back are on
-      if (ir[4])
+      if (ir[4]) //!ir[3] | !ir[5]) & ir[4] | (ir[3] & ir[4] & ir[5]))
            dirDrive(XDIR, dir, HALF_SPEED);
       else if (ir[3]){
         singleDrive(0, FORWARD, SLOW_SPEED); //dir == FORWARD ? FORWARD : BACKWARD
@@ -437,7 +431,7 @@ void followLines(uint8_t dir, int irSave) {
         irSave &= ~BACKRIGHT;
         }
       else if (ir[5]){
-        singleDrive(0, BACKWARD, SLOW_SPEED);//dir == FORWARD ? BACKWARD : FORWARDc
+        singleDrive(0, BACKWARD, SLOW_SPEED);//dir == FORWARD ? BACKWARD : FORWARD
         irSave |= BACKRIGHT;
         irSave &= ~BACKLEFT;
         }
@@ -449,12 +443,10 @@ void followLines(uint8_t dir, int irSave) {
     else {
       if(irSave & BACKLEFT)
         singleDrive(0, FORWARD, MEH_SPEED);
-      else if(irSave & BACKRIGHT)
+      else
         singleDrive(0, BACKWARD, MEH_SPEED);
-      else{
-        dirDrive();
-      }
-      dirDrive(XDIR, dir, HALF_SPEED); //otherwise stop
+      dirDrive(XDIR, DRIVE, SLOW_SPEED); //otherwise stop
+      delay(1);
     }
   }
   dirDrive(); //stop when done
