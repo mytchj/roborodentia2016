@@ -335,6 +335,8 @@ void game() {
   turnDrive(FRONTRIGHT);
   delay(1234);
   followLines(FORWARD, FRONTLEFT | BACKLEFT);
+
+  
 }
 
 void laps(uint8_t numberOfLaps) {
@@ -389,7 +391,7 @@ void serialDo() {
     case 'v': updateSonar();               break;
 
     case 'm': singleDrive(0, FORWARD, SLOW_SPEED + 60); break;  
-    case 'n': game(); break;  
+	case 'n': game(); break;  
     
     case 'q': followLines(FORWARD, 0);                        break;
     case 'w': followLines(BACKWARD, 0);                        break;
@@ -416,9 +418,8 @@ void followLines(uint8_t dir) {
 
 // Runs the front and back
 void followLines(uint8_t dir, int irSave) {
-  int i = 5000;
   dirDrive(XDIR, dir, HALF_SPEED);
-  while(i--) {
+  do{
     ir = Location::updateInfrared();
 
     //THIS CHECKS THE FRONT IR's
@@ -426,12 +427,12 @@ void followLines(uint8_t dir, int irSave) {
       if (ir[1])
         dirDrive(XDIR, dir, HALF_SPEED);
       else if (ir[0]){
-        singleDrive(2, FORWARD , SLOW_SPEED); //dir == FORWARD ? FORWARD : BACKWARD
+        singleDrive(2, BACKWARD , SLOW_SPEED); //dir == FORWARD ? FORWARD : BACKWARD
         irSave |= FRONTLEFT;
         irSave &= ~FRONTRIGHT;
       }
       else if (ir[2]){
-        singleDrive(2, BACKWARD, SLOW_SPEED); //dir == FORWARD ? BACKWARD : FORWARD
+        singleDrive(2, FORWARD, SLOW_SPEED); //dir == FORWARD ? BACKWARD : FORWARD
         irSave |= FRONTRIGHT;
         irSave &= ~FRONTLEFT;
       }
@@ -441,9 +442,9 @@ void followLines(uint8_t dir, int irSave) {
     }
     else{
       if(irSave & FRONTLEFT)
-        singleDrive(2, FORWARD, MEH_SPEED);
-      else if(irSave & FRONTRIGHT)
         singleDrive(2, BACKWARD, MEH_SPEED);
+      else if(irSave & FRONTRIGHT)
+        singleDrive(2, FORWARD, MEH_SPEED);
       else{
         dirDrive();
       }   
@@ -455,12 +456,12 @@ void followLines(uint8_t dir, int irSave) {
       if (ir[4])
            dirDrive(XDIR, dir, HALF_SPEED);
       else if (ir[3]){
-        singleDrive(0, FORWARD, SLOW_SPEED); //dir == FORWARD ? FORWARD : BACKWARD
+        singleDrive(0, BACKWARD, SLOW_SPEED); //dir == FORWARD ? FORWARD : BACKWARD
         irSave |= BACKLEFT;
         irSave &= ~BACKRIGHT;
         }
       else if (ir[5]){
-        singleDrive(0, BACKWARD, SLOW_SPEED);//dir == FORWARD ? BACKWARD : FORWARDc
+        singleDrive(0, FORWARD, SLOW_SPEED);//dir == FORWARD ? BACKWARD : FORWARDc
         irSave |= BACKRIGHT;
         irSave &= ~BACKLEFT;
         }
@@ -471,15 +472,18 @@ void followLines(uint8_t dir, int irSave) {
     }
     else {
       if(irSave & BACKLEFT)
-        singleDrive(0, FORWARD, MEH_SPEED);
-      else if(irSave & BACKRIGHT)
         singleDrive(0, BACKWARD, MEH_SPEED);
+      else if(irSave & BACKRIGHT)
+        singleDrive(0, FORWARD, MEH_SPEED);
       else{
         dirDrive();
       }
       dirDrive(XDIR, dir, HALF_SPEED); //otherwise stop
     }
-  }
+    updateSonar();
+    Serial.println(distance[dir == FORWARD ? 0 : 2]);
+  } while(distance[dir == BACKWARD ? 0 : 2] > 5);
+  
   dirDrive(); //stop when done
 }
 
