@@ -14,7 +14,7 @@ AF_DCMotor motor3(3);
 AF_DCMotor *slide[SERVOCOUNT] = {&motor1, &motor2, &motor3};
 
 static int startTime;
-static uint8_t distance[SONAR_NUM]; 
+static uint8_t* distance; 
 static boolean* ir; //[IRCOUNT];    
 static uint8_t clampStatus[SERVOCOUNT] = {OPEN, OPEN, OPEN};
 
@@ -81,29 +81,25 @@ void loop() {
 
 #else
 
+  dirDrive(XDIR, BACKWARD, FULL_SPEED);
+  delay(500);
+  dirDrive(XDIR, BACKWARD, HALF_SPEED);
+  delay(500);
+  dirDrive();
+  delay(500);
+  dirDrive(XDIR, FORWARD, FULL_SPEED);
+  delay(500);
+  dirDrive(XDIR, FORWARD, HALF_SPEED);
+  delay(500);
 
-dirDrive(XDIR, BACKWARD, FULL_SPEED);
-delay(500);
 
-dirDrive(XDIR, BACKWARD, HALF_SPEED);
-delay(500);
-
-dirDrive();
-delay(500);
-
-dirDrive(XDIR, FORWARD, FULL_SPEED);
-delay(500);
-
-dirDrive(XDIR, FORWARD, HALF_SPEED);
-delay(500);
-  
-#endif
-    
+#endif    
 
 }
 
 void restart() {
-  asm volatile("  jmp 0");
+  digitalWrite(LEDPIN, LOW);
+  asm volatile("  jmp 0"); // do not trust the jump
 }
 
 void endMatch() {
@@ -323,10 +319,16 @@ void deposit() {
 
 void laps(uint8_t numberOfLaps) {
   while (numberOfLaps--) {
-    updateSonar();
-    sonarDrive(XDIR, FORWARD);
+    Serial.println("FollowForward");
+    followLines(FORWARD);
+    followLines(FORWARD);
+    Serial.println("Withdraw");
     withdraw();
-    sonarDrive(XDIR, FORWARD); 
+    
+    Serial.println("FollowBackward");
+    followLines(BACKWARD);
+    followLines(BACKWARD);
+    Serial.println("Deposit");
     deposit();
   }
 }
@@ -335,13 +337,13 @@ void testLift() {
   uint8_t i = 0;
   while (i < POTCOUNT) {
     lift(i, FORWARD);
-    delay(2000);
+    delay(1000);
     lift(i, RELEASE);
-    delay(2000);
+    delay(1000);
     lift(i, BACKWARD);
-    delay(2000);
+    delay(1000);
     lift(i, RELEASE);
-    delay(2000);
+    delay(1000);
     i++;
   }
   
@@ -356,7 +358,6 @@ void serialDo() {
     case '2': hump(BRAKE);        break;
     case '6': testLift();         break;
     case '9': laps(1);             break;
-    case '0': laps(10);             break;
 
     case 'a': clamp(1, OPEN);            break;
     case 's': clamp(1, CLOSE);            break;
@@ -413,7 +414,7 @@ void followLines(uint8_t dir) {
       }
     }
     else{
-      Serial.println("SAVE FRONT!!!");
+      //Serial.println("SAVE FRONT!!!");
       if(irSave & FRONTLEFT)
         singleDrive(2, FORWARD, MEH_SPEED);
       else
@@ -453,85 +454,10 @@ void followLines(uint8_t dir) {
   dirDrive(); //stop when done
 }
 
-void updateSonar() {
-  int tempDistanceArr[SONAR_AVERAGING_PRECISION][SONAR_NUM] =  {};
-  uint8_t* tempDistance;
-  int avgDistance1[SONAR_NUM] = {};
-  int avgDistance2[SONAR_NUM] = {};
-  int minRead[SONAR_NUM] = {};
-  int closest[SONAR_NUM] = {};
-  uint8_t numGoodReadings[SONAR_NUM] = {};
-
-  // Take multiple readings
-  for (uint8_t i = 0; i < SONAR_AVERAGING_PRECISION; i++) {
-    tempDistance = Location::updateSonar();
-    for (uint8_t j = 0; j < SONAR_NUM; j++)
-      avgDistance1[j] += tempDistanceArr[i][j] = tempDistance[j];
-  }
-
-  // Average those readings
-  for (uint8_t j = 0; j < SONAR_NUM; j++) {
-    avgDistance1[j] /= SONAR_AVERAGING_PRECISION;
-  }
-
-    closest[0] = tempDistanceArr[0][0];
-    closest[1] = tempDistanceArr[0][1];
-    closest[2] = tempDistanceArr[0][2];
-    closest[3] = tempDistanceArr[0][3];
-    minRead[0] = abs(tempDistanceArr[0][0] - avgDistance1[0]);
-    minRead[1] = abs(tempDistanceArr[0][1] - avgDistance1[1]);
-    minRead[2] = abs(tempDistanceArr[0][2] - avgDistance1[2]);
-    minRead[3] = abs(tempDistanceArr[0][3] - avgDistance1[3]);
-    
-    for(uint8_t i = 0; i < SONAR_AVERAGING_PRECISION; i++) {
-      for(uint8_t j = 0; j < SONAR_NUM; j++) {
-        if(minRead[j] > abs(tempDistanceArr[i][j] - avgDistance1[j])){
-          closest[j] = tempDistanceArr[i][j];
-          minRead[j] = abs(tempDistanceArr[i][j] - avgDistance1[j]);
-        }
-      }
-    }
-
-    //chops off the wrong numbers
-    for(uint8_t i = 0; i < SONAR_NUM; i++) {
-      if(closest[i] > avgDistance1[i]){
-        for(uint8_t j = 0; j < SONAR_AVERAGING_PRECISION; j++)
-          if(tempDistanceArr[i][j] > avgDistance1[i])
-            avgDistance2[j] += tempDistanceArr[i][j];
-      }
-      else if(closest[i] < avgDistance1[i]){
-        for(uint8_t j = 0; j < SONAR_AVERAGING_PRECISION; j++)
-          if(tempDistanceArr[i][j] < avgDistance1[i])
-            avgDistance2[j] += tempDistanceArr[i][j];
-      }
-      else
-        for(uint8_t j = 0; j < SONAR_NUM; j++){
-          avgDistance2[j] = avgDistance1[i];
-          Serial.print(avgDistance2[j]);
-        }
-
-    }
-  /*
-  // Average those corrected readings
-  for (uint8_t j = 0; j < SONAR_NUM; j++) {
-    if (numGoodReadings[j] > 0)
-      distance[j] = avgDistance2[j] / numGoodReadings[j];
-    else
-      distance[j] = 0;
-    Serial.print(distance[j]);
-    Serial.print(".");
-    */
-//    Serial.print(avgDistance2[j]);
-    Serial.print("\t");
-  //}
-  Serial.println();
-  
-}
-
 void sonarDrive(int axis, int dir) {
   dirDrive();
   updateSonar();
-  while (distance[axis + (dir - 1) * 2] > 1) { // Any of the front are on
+  while (distance[axis + (dir - 1) * 2] > 1) {
     if (distance[axis + (dir - 1) * 2] > 5)
       dirDrive(axis, dir, FULL_SPEED);
     else
@@ -539,6 +465,10 @@ void sonarDrive(int axis, int dir) {
     updateSonar();
   }
   dirDrive(); //stop when done
+}
+
+void updateSonar() {
+  distance = Location::updateSonar();
 }
 
 void updateLocation() {

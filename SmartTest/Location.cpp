@@ -42,9 +42,54 @@ void Location::Init(void) {
     pinMode(irRead[i], INPUT);
 }
 
-uint8_t* Location::updateSonar(void) {
+uint8_t* Location::updateSonarQuick(void) {
   for (uint8_t i = 0; i < SONAR_NUM; i++) // Loop through all the sensors.
     cm[i] = sonar[i].ping() / US_ROUNDTRIP_CM;
+  return (uint8_t*)cm;
+}
+
+// updates all sonars
+uint8_t* Location::updateSonar(void) {
+  uint8_t* tempDistance;
+  unsigned int avgDistance[SONAR_NUM] = {};
+  unsigned int AllReadingsArr[SONAR_AVERAGING_PRECISION][SONAR_NUM] =  {};
+  unsigned int closest[SONAR_NUM];
+  unsigned int finalAnswer[SONAR_NUM] = {};
+  uint8_t numGoodReadings[SONAR_NUM] = {};
+
+  // Take multiple readings and get average
+  for (uint8_t i = 0; i < SONAR_AVERAGING_PRECISION; i++) {
+    tempDistance = updateSonarQuick();
+    for (uint8_t j = 0; j < SONAR_NUM; j++)
+      avgDistance[j] += AllReadingsArr[i][j] = tempDistance[j];
+  }
+
+  // Find most accurate of those readings
+  for (uint8_t i = 0; i < SONAR_NUM; i++) {
+    avgDistance[i] /= SONAR_AVERAGING_PRECISION;
+    closest[i] = 690;
+    for (uint8_t j = 0; j < SONAR_AVERAGING_PRECISION; j++) {
+      if (abs(AllReadingsArr[j][i] - avgDistance[i]) < closest[i]) {
+        closest[i] = abs(AllReadingsArr[j][i] - avgDistance[j]); 
+        finalAnswer[i] = AllReadingsArr[j][i];
+      }
+    }
+  }
+
+  // Throw away readings that are far from best guess
+  // Reguess based on reduced set
+  for (uint8_t i = 0; i < SONAR_NUM; i++) {
+    avgDistance[i] = finalAnswer[i];
+    finalAnswer[i] = 0;
+    for (uint8_t j = 0; j < SONAR_AVERAGING_PRECISION; j++) {
+      if ((abs(AllReadingsArr[j][i] - avgDistance[i]) < FUDGING_DISTANCE)) {
+        finalAnswer[i] += AllReadingsArr[j][i];
+        numGoodReadings[i]++;
+      }
+    }
+    cm[i] = finalAnswer[i] / numGoodReadings[i];
+  }
+
   return (uint8_t*)cm;
 }
 

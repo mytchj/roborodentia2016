@@ -31,6 +31,7 @@ class Location {
 #endif
     static boolean* updateInfrared();
     static bool irMap(int);
+    static uint8_t* updateSonarQuick();
     static uint8_t* updateSonar();
     static void echoCheck();
 };
