@@ -41,6 +41,8 @@
 #define FRONTRIGHT 0x02
 #define BACKLEFT 0x04
 #define BACKRIGHT 0x08
+#define GOLEFT 0x05
+#define GORIGHT 0x0A
 
 // For DCMotors
 #define DRIVE true
