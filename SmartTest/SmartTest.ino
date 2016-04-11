@@ -417,72 +417,64 @@ void followLines(uint8_t dir) {
 }
 
 // Runs the front and back
-void followLines(uint8_t dir, int irSave) {
+void followLines(uint8_t dir, byte irSave) {
+  int dist = SLOW_SPEED, speed;
   dirDrive(XDIR, dir, HALF_SPEED);
   do{
     ir = Location::updateInfrared();
+    speed = (dist << 1) + 60;
+    if(speed > FULL_SPEED)
+      speed = FULL_SPEED;
+    else if(dist < 50)
+      speed = MEH_SPEED;
 
     //THIS CHECKS THE FRONT IR's
     if (ir[0] | ir[1] | ir[2]) { // Any of the front are on
-      if (ir[1])
-        dirDrive(XDIR, dir, HALF_SPEED);
-      else if (ir[0]){
-        singleDrive(2, BACKWARD , SLOW_SPEED); //dir == FORWARD ? FORWARD : BACKWARD
+      if (!ir[2]){
+        singleDrive(2, BACKWARD , SLOW_SPEED);
         irSave |= FRONTLEFT;
         irSave &= ~FRONTRIGHT;
       }
-      else if (ir[2]){
-        singleDrive(2, FORWARD, SLOW_SPEED); //dir == FORWARD ? BACKWARD : FORWARD
+      else if (!ir[0]){
+        singleDrive(2, FORWARD, SLOW_SPEED);
         irSave |= FRONTRIGHT;
         irSave &= ~FRONTLEFT;
       }
-      else {
-        dirDrive();
-      }
+      else
+        dirDrive(XDIR, dir, speed);
     }
     else{
       if(irSave & FRONTLEFT)
         singleDrive(2, BACKWARD, MEH_SPEED);
       else if(irSave & FRONTRIGHT)
         singleDrive(2, FORWARD, MEH_SPEED);
-      else{
-        dirDrive();
-      }   
-      dirDrive(XDIR, dir, HALF_SPEED); //otherwise stop
+      dirDrive(XDIR, dir, MEH_SPEED);
     }
 
     //THIS CHECKS THE BACK IR's
     if (ir[3] | ir[4] | ir[5]) { // Any of the back are on
-      if (ir[4])
-           dirDrive(XDIR, dir, HALF_SPEED);
-      else if (ir[3]){
-        singleDrive(0, BACKWARD, SLOW_SPEED); //dir == FORWARD ? FORWARD : BACKWARD
+      if (!ir[5]){
+        singleDrive(0, BACKWARD, SLOW_SPEED);
         irSave |= BACKLEFT;
         irSave &= ~BACKRIGHT;
         }
-      else if (ir[5]){
-        singleDrive(0, FORWARD, SLOW_SPEED);//dir == FORWARD ? BACKWARD : FORWARDc
+      else if (!ir[3]){
+        singleDrive(0, FORWARD, SLOW_SPEED)
         irSave |= BACKRIGHT;
         irSave &= ~BACKLEFT;
         }
-      else {
-        dirDrive();
-        Serial.println("Illegal state detected");
-      }
+      else
+        dirDrive(XDIR, dir, speed);
     }
     else {
       if(irSave & BACKLEFT)
-        singleDrive(0, BACKWARD, MEH_SPEED);
+        singleDrive(0, BACKWARD, MEH_SPEED + 25);
       else if(irSave & BACKRIGHT)
-        singleDrive(0, FORWARD, MEH_SPEED);
-      else{
-        dirDrive();
-      }
-      dirDrive(XDIR, dir, HALF_SPEED); //otherwise stop
+        singleDrive(0, FORWARD, MEH_SPEED + 25);
+      dirDrive(XDIR, dir, MEH_SPEED); //otherwise stop
     }
     updateSonar();
-    Serial.println(distance[dir == FORWARD ? 0 : 2]);
-  } while(distance[dir == BACKWARD ? 0 : 2] > 5);
+  } while((dist = distance[dir == BACKWARD ? 0 : 2]) > 5);
   
   dirDrive(); //stop when done
 }
