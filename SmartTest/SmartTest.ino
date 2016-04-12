@@ -16,7 +16,7 @@ AF_DCMotor *slide[SERVOCOUNT] = {&motor1, &motor2, &motor3};
 static int startTime;
 static uint8_t* distance; 
 static boolean* ir; //[IRCOUNT];    
-static uint8_t clampStatus[SERVOCOUNT] = {OPEN, OPEN, OPEN};
+static uint8_t clampStatus[SERVOCOUNT] = {STOP, STOP, STOP};
 
 // Usage example
   //distance = Location::updateSonar();
@@ -60,7 +60,6 @@ void setup() {
 }
 
 void loop() {
-	//game();
   if (digitalRead(BUTTONPIN) && millis() - startTime > 10000) {    
     #if DEBUG_ENABLED
       Serial.println("Restarting");
@@ -134,8 +133,6 @@ void hump(int direction) {
 void lift(uint8_t selector, uint8_t pos) {
   slide[selector]->setSpeed(FULL_SPEED);
   slide[selector]->run(pos);
-  if (pos == RELEASE)
-    slide[selector]->setSpeed(FULL_SPEED);
 }
 
 // select state manually
@@ -146,7 +143,7 @@ void clamp(uint8_t selector, uint8_t state) {
     clampStatus[selector] = CLOSE;
   } else if (state == OPEN) {
     cservoAttach(selector);
-    cservo[selector].write(90);
+    cservo[selector].write(69);
     clampStatus[selector] = OPEN;
   } else if (state == STOP) {
     cservoDetach(selector);
@@ -321,33 +318,33 @@ void toggleLED() {
   digitalWrite(LEDPIN, status = !status);
 }
 
-void withdraw() {
-  // Get out of the way of middle clamp
-  clamp(0, CLOSE);
-  clamp(2, CLOSE);
+void withdraw(uint8_t num) {
+  // Get others out of the way
+  lift(num, BACKWARD);
+  lift((num + 1) % POTCOUNT, FORWARD);
+  lift((num + 2) % POTCOUNT, FORWARD);
+  delay(690);
 
-  //Grab middle
-  clamp(1, CLOSE);
-  delay(100);
-  lift(1, FORWARD);
+  // Grab
+  clamp(num, CLOSE);
+  delay(690);
+  lift(num, FORWARD);
+  delay(690);
 
-  
-  lift(0, BACKWARD);
-  lift(2, BACKWARD);
-  clamp(0, OPEN);
-  clamp(2, OPEN);
-  delay(1000);
-  clamp(0, CLOSE);
-  clamp(2, CLOSE);
-  delay(100);
-  lift(0, FORWARD);
-  lift(2, FORWARD);
-  
-  
+  // Release Everyone
+  lift((num + 1) % POTCOUNT, RELEASE);
+  lift((num + 2) % POTCOUNT, RELEASE);  
+  lift(num, RELEASE);
 }
 
-void deposit() {
-  
+void deposit(uint8_t num) {
+  lift(num, BACKWARD);
+  clamp(num, OPEN);
+  delay(690);
+  lift(num, FORWARD);
+  delay(690 / 2);
+  clamp(num, CLOSE);
+  delay(690 / 2);
 }
 
 void game() {
@@ -559,19 +556,48 @@ void followLines(uint8_t dir, byte irSave, bool drive) {
   dirDrive(); //stop when done
 }
 
-void sonarDrive(int axis, int dir) {
+void shiftOver(uint8_t axis, uint8_t dir, uint8_t farther) {
+  updateSonar();
+  uint8_t where = distance[FIND_SONAR] - farther;
+  while (distance[FIND_SONAR] != where) {
+    stabilize(axis, dir, where);
+    updateSonar();
+  }
+}
+
+void stabilize(uint8_t axis, uint8_t dir, uint8_t where) {
+  uint8_t fS = FIND_SONAR;
+  updateSonar();
+  while (distance[fS] != where) {
+    Serial.print(distance[fS]);
+    Serial.print("   ");
+    Serial.println(where);
+    if (distance[fS] > where)
+      dirDrive(axis, dir, SLOW_SPEED);
+    else
+      dirDrive(axis, dir ^ 0x03, SLOW_SPEED);
+    updateSonar();
+  }
+  dirDrive();
+  Serial.print(distance[fS]);
+}
+
+void sonarDrive(uint8_t axis, uint8_t dir) {
+  int x;
   dirDrive();
   updateSonar();
-  while (distance[axis + (dir - 1) * 2] > 1) {
-    if (distance[axis + (dir - 1) * 2] > 5)
+
+
+  while ((x = distance[FIND_SONAR]) > 3) {
+
+    if (x > 25)
       dirDrive(axis, dir, FULL_SPEED);
     else
-      dirDrive(axis, dir, HALF_SPEED);
+      dirDrive(axis, dir, SLOW_SPEED);
     updateSonar();
   }
   dirDrive(); //stop when done
 }
-
 void updateSonar() {
   distance = Location::updateSonar();
 }
