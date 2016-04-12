@@ -240,8 +240,10 @@ void dirDrive() {
   hm[3]->drive(0, RELEASE);
 }
 
-void turnDrive(uint8_t dir) {
-  if (dir == FRONTLEFT) { 
+void turnDrive(uint8_t dir, bool ninety){
+  int sonarDistance;
+  int timeCap;
+    if (dir == FRONTLEFT) { 
     hm[0]->drive(200, BACKWARD);
     hm[1]->drive(MEH_SPEED, FORWARD);
     hm[2]->drive(FULL_SPEED, BACKWARD);
@@ -251,11 +253,25 @@ void turnDrive(uint8_t dir) {
     hm[0]->drive(HALF_SPEED + 20, FORWARD);
     hm[1]->drive(HALF_SPEED, BACKWARD);
     hm[2]->drive(HALF_SPEED + 20, FORWARD);
-   delay(200);
+    if(!ninety)
+      delay(200);
   }
-  delay(1100);
+  if(!ninety)
+    delay(1100);
+  else{
+    timeCap = millis();
+    delay(500);
+    do{
+      updateSonar();
+      sonarDistance = distance[0] + distance[2];
+    }while(!(sonarDistance == 90) & (timeCap - millis()) < 600);
+    singleDrive(0, BRAKE);
+    singleDrive(1, BRAKE);
+    singleDrive(2, BRAKE);
+  }
   dirDrive();
 }
+
 
 #if DEBUG_ENABLED
 
