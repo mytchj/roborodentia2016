@@ -237,6 +237,10 @@ void dirDrive() {
   hm[3]->drive(0, RELEASE);
 }
 
+void turnDrive(uint8_t dir) {
+  turnDrive(dir, false);
+}
+
 void turnDrive(uint8_t dir, bool ninety){
   int sonarDistance;
   int timeCap;
