@@ -240,17 +240,19 @@ void dirDrive() {
 }
 
 void turnDrive(uint8_t dir) {
-  if (dir == FRONTLEFT) {
-    hm[1]->drive(FULL_SPEED, FORWARD);
-    hm[2]->drive(HALF_SPEED, BACKWARD);
-    hm[3]->drive(HALF_SPEED, FORWARD);
+  if (dir == FRONTLEFT) { 
+    hm[0]->drive(200, BACKWARD);
+    hm[1]->drive(MEH_SPEED, FORWARD);
+    hm[2]->drive(FULL_SPEED, BACKWARD);
+    hm[3]->drive(MEH_SPEED, BACKWARD);
   }
   else if (dir == FRONTRIGHT) {
-    hm[1]->drive(HALF_SPEED, FORWARD);
+    hm[0]->drive(MEH_SPEED + 20, FORWARD);
+    hm[1]->drive(HALF_SPEED, BACKWARD);
     hm[2]->drive(HALF_SPEED, FORWARD);
-    hm[3]->drive(FULL_SPEED, FORWARD);
+   delay(100);
   }
-  delay(1500);
+  delay(1000);
   dirDrive();
 }
 
@@ -390,7 +392,15 @@ void serialDo() {
     case 'c': Location::printSonar();               break;
     case 'v': updateSonar();               break;
 
-    case 'm': singleDrive(0, FORWARD, SLOW_SPEED + 60); break;  
+    case 'm' : turnDrive(FRONTLEFT); break;
+    case 'q': followLines(FORWARD, GORIGHT);                        break;
+    case 'w': followLines(BACKWARD, GORIGHT);                        break;
+    case 'e': followLines(FORWARD, GOLEFT, false); break;
+
+    case 'i': turnDrive(FRONTRIGHT); break;
+    case 'g': followLines(FORWARD, GORIGHT, false); break;
+    
+    
 	case 'n': game(); break;  
     
     case 'q': followLines(FORWARD, 0);                        break;
@@ -416,18 +426,28 @@ void followLines(uint8_t dir) {
   followLines(dir, 0);
 }
 
+void followLines(uint8_t dir, byte irSave){
+  followLines(dir, irSave, true);
+}
+
 // Runs the front and back
-void followLines(uint8_t dir, byte irSave) {
+void followLines(uint8_t dir, byte irSave, bool drive) {
   int dist = SLOW_SPEED, speed;
-  dirDrive(XDIR, dir, HALF_SPEED);
+  if(drive)
+    dirDrive(XDIR, dir, HALF_SPEED);
   do{
     ir = Location::updateInfrared();
-    speed = (dist << 1) + 60;
-    if(speed > FULL_SPEED)
-      speed = FULL_SPEED;
-    else if(dist < 50)
-      speed = MEH_SPEED;
+    if(drive){
+      speed = (dist << 1) + 60;
+      if(speed > FULL_SPEED)
+        speed = FULL_SPEED;
+      else if(dist < 50)
+        speed = MEH_SPEED;
+    }
+    else
+      speed = 0;
 
+      Serial.println(speed);
     //THIS CHECKS THE FRONT IR's
     if (ir[0] | ir[1] | ir[2]) { // Any of the front are on
       if (!ir[2]){
@@ -448,7 +468,8 @@ void followLines(uint8_t dir, byte irSave) {
         singleDrive(2, BACKWARD, MEH_SPEED);
       else if(irSave & FRONTRIGHT)
         singleDrive(2, FORWARD, MEH_SPEED);
-      dirDrive(XDIR, dir, MEH_SPEED);
+      if(drive)
+        dirDrive(XDIR, dir, MEH_SPEED);
     }
 
     //THIS CHECKS THE BACK IR's
@@ -459,7 +480,7 @@ void followLines(uint8_t dir, byte irSave) {
         irSave &= ~BACKRIGHT;
         }
       else if (!ir[3]){
-        singleDrive(0, FORWARD, SLOW_SPEED)
+        singleDrive(0, FORWARD, SLOW_SPEED);
         irSave |= BACKRIGHT;
         irSave &= ~BACKLEFT;
         }
@@ -471,11 +492,16 @@ void followLines(uint8_t dir, byte irSave) {
         singleDrive(0, BACKWARD, MEH_SPEED + 25);
       else if(irSave & BACKRIGHT)
         singleDrive(0, FORWARD, MEH_SPEED + 25);
-      dirDrive(XDIR, dir, MEH_SPEED); //otherwise stop
+      if(drive)
+        dirDrive(XDIR, dir, MEH_SPEED); //otherwise stop
     }
-    updateSonar();
-  } while((dist = distance[dir == BACKWARD ? 0 : 2]) > 5);
-  
+    if(drive)
+      updateSonar();
+    else
+      if(ir[1] & ir[2])
+        break;
+  } while(!drive | ((dist = distance[dir == BACKWARD ? 0 : 2]) > 5 | dist == 0));
+  //Serial.println(dist);
   dirDrive(); //stop when done
 }
 
