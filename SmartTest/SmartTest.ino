@@ -60,6 +60,7 @@ void setup() {
 }
 
 void loop() {
+	//game();
   if (digitalRead(BUTTONPIN) && millis() - startTime > 10000) {    
     #if DEBUG_ENABLED
       Serial.println("Restarting");
@@ -247,12 +248,12 @@ void turnDrive(uint8_t dir) {
     hm[3]->drive(MEH_SPEED, BACKWARD);
   }
   else if (dir == FRONTRIGHT) {
-    hm[0]->drive(MEH_SPEED + 20, FORWARD);
+    hm[0]->drive(HALF_SPEED + 20, FORWARD);
     hm[1]->drive(HALF_SPEED, BACKWARD);
-    hm[2]->drive(HALF_SPEED, FORWARD);
-   delay(100);
+    hm[2]->drive(HALF_SPEED + 20, FORWARD);
+   delay(200);
   }
-  delay(1000);
+  delay(1100);
   dirDrive();
 }
 
@@ -334,11 +335,46 @@ void deposit() {
 }
 
 void game() {
-  turnDrive(FRONTRIGHT);
-  delay(1234);
-  followLines(FORWARD, FRONTLEFT | BACKLEFT);
+  while(!digitalRead(BUTTONPIN));
+    Serial.println("FIGHT!");
 
-  
+  turnDrive(FRONTRIGHT);
+  delay(100);
+  followLines(FORWARD, GORIGHT);
+
+  delay(1000);
+
+  turnDrive(FRONTRIGHT);
+  delay(100);
+  followLines(FORWARD, GORIGHT, false);
+  delay(50);
+  followLines(FORWARD, GOLEFT, false);
+  delay(50);
+  followLines(FORWARD, GORIGHT);
+
+  delay(1000);
+
+  turnDrive(FRONTLEFT);
+  delay(100);
+  followLines(FORWARD, GOLEFT, false);
+  followLines(FORWARD, GORIGHT, false);
+  followLines(FORWARD, GOLEFT);
+
+  delay(1000);
+
+  turnDrive(FRONTRIGHT);
+  delay(100);
+  followLines(FORWARD, GORIGHT, false);
+  delay(50);
+  followLines(FORWARD, GOLEFT, false);
+  delay(50);
+  followLines(FORWARD, GORIGHT);
+
+  //try uturn
+  turnDrive(FRONTRIGHT);
+  delay(100);
+  turnDrive(FRONTRIGHT);
+  followLines(FORWARD, GORIGHT, false);
 }
 
 void laps(uint8_t numberOfLaps) {
@@ -442,7 +478,7 @@ void followLines(uint8_t dir, byte irSave, bool drive) {
       if(speed > FULL_SPEED)
         speed = FULL_SPEED;
       else if(dist < 50)
-        speed = MEH_SPEED;
+        speed = MEH_SPEED - 20;
     }
     else
       speed = 0;
@@ -502,6 +538,8 @@ void followLines(uint8_t dir, byte irSave, bool drive) {
         break;
   } while(!drive | ((dist = distance[dir == BACKWARD ? 0 : 2]) > 5 | dist == 0));
   //Serial.println(dist);
+  if(drive)
+    delay(50);
   dirDrive(); //stop when done
 }
 
