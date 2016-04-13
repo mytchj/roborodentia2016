@@ -241,9 +241,8 @@ void turnDrive(uint8_t dir) {
   turnDrive(dir, false);
 }
 
+
 void turnDrive(uint8_t dir, bool ninety){
-  int sonarDistance;
-  int timeCap;
     if (dir == FRONTLEFT) { 
     hm[0]->drive(200, BACKWARD);
     hm[1]->drive(MEH_SPEED, FORWARD);
@@ -254,25 +253,13 @@ void turnDrive(uint8_t dir, bool ninety){
     hm[0]->drive(HALF_SPEED + 20, FORWARD);
     hm[1]->drive(HALF_SPEED, BACKWARD);
     hm[2]->drive(HALF_SPEED + 20, FORWARD);
-    if(!ninety)
-      delay(200);
+    delay(200);
   }
-  if(!ninety)
-    delay(1100);
-  else{
-    timeCap = millis();
-    delay(500);
-    do{
-      updateSonar();
-      sonarDistance = distance[0] + distance[2];
-    }while(!(sonarDistance == 90) & (timeCap - millis()) < 600);
-    singleDrive(0, BRAKE);
-    singleDrive(1, BRAKE);
-    singleDrive(2, BRAKE);
-  }
+  delay(1000);
+  if(ninety)
+    followLines(FORWARD, GORIGHT);
   dirDrive();
 }
-
 
 #if DEBUG_ENABLED
 
@@ -355,43 +342,60 @@ void game() {
   while(!digitalRead(BUTTONPIN));
     Serial.println("FIGHT!");
 
+
+  //PICKUP RING CODE HERE
+
+  
   turnDrive(FRONTRIGHT);
   delay(100);
   followLines(FORWARD, GORIGHT);
 
-  delay(1000);
+  delay(1000); // DEPOSIT RING CODE HERE
 
-  turnDrive(FRONTRIGHT);
-  delay(100);
+  turnDrive(FRONTRIGHT, true);
   followLines(FORWARD, GORIGHT, false);
-  delay(50);
-  followLines(FORWARD, GOLEFT, false);
-  delay(50);
-  followLines(FORWARD, GORIGHT);
+  dirDrive(XDIR, FORWARD, HALF_SPEED);
+  delay(200);
+  followLines(FORWARD, GORIGHT, false, true);
+  delay(100);
+  followLines(FORWARD, GOLEFT, false, true);
+  delay(100);
+  followLines(FORWARD, GORIGHT, false, true);
+  delay(100);
+  followLines(FORWARD, GOLEFT, false, true);
 
-  delay(1000);
+  delay(1000); // Pickup Ring code here
 
   turnDrive(FRONTLEFT);
-  delay(100);
   followLines(FORWARD, GOLEFT, false);
   followLines(FORWARD, GORIGHT, false);
   followLines(FORWARD, GOLEFT);
 
-  delay(1000);
+  delay(1000); // Drop ring code here
 
-  turnDrive(FRONTRIGHT);
-  delay(100);
+  turnDrive(FRONTRIGHT, true);
   followLines(FORWARD, GORIGHT, false);
-  delay(50);
-  followLines(FORWARD, GOLEFT, false);
-  delay(50);
-  followLines(FORWARD, GORIGHT);
+  dirDrive(XDIR, FORWARD, HALF_SPEED);
+  delay(200);
+  followLines(FORWARD, GORIGHT, false, true);
+  delay(100);
+  followLines(FORWARD, GOLEFT, false, true);
+  delay(100);
+  followLines(FORWARD, GORIGHT, false, true);
+  delay(100);
+  followLines(FORWARD, GOLEFT, false, true);
 
+  delay(1000); //pickup rings here
+  
   //try uturn
   turnDrive(FRONTRIGHT);
   delay(100);
   turnDrive(FRONTRIGHT);
-  followLines(FORWARD, GORIGHT, false);
+  //followLines(FORWARD, GORIGHT, false);  
+  followLines(FORWARD, GOLEFT, false);
+  followLines(FORWARD, GORIGHT, 0);
+
+  //Drop off ring code here
 }
 
 void laps(uint8_t numberOfLaps) {
@@ -400,13 +404,13 @@ void laps(uint8_t numberOfLaps) {
     followLines(FORWARD, 0);
     followLines(FORWARD, 0);
     Serial.println("Withdraw");
-    withdraw();
+    withdraw(1); //temp value
     
     Serial.println("FollowBackward");
     followLines(BACKWARD, 0);
     followLines(BACKWARD, 0);
     Serial.println("Deposit");
-    deposit();
+    deposit(1); //temp value
   }
 }
 
@@ -483,8 +487,12 @@ void followLines(uint8_t dir, byte irSave){
   followLines(dir, irSave, true);
 }
 
+void followLines(uint8_t dir, byte irSave, bool drive){
+  followLines(dir, irSave, drive, false);
+}
+
 // Runs the front and back
-void followLines(uint8_t dir, byte irSave, bool drive) {
+void followLines(uint8_t dir, byte irSave, bool drive, bool checkBack) {
   int dist = SLOW_SPEED, speed;
   if(drive)
     dirDrive(XDIR, dir, HALF_SPEED);
@@ -500,7 +508,7 @@ void followLines(uint8_t dir, byte irSave, bool drive) {
     else
       speed = 0;
 
-      Serial.println(speed);
+    //  Serial.println(speed);
     //THIS CHECKS THE FRONT IR's
     if (ir[0] | ir[1] | ir[2]) { // Any of the front are on
       if (!ir[2]){
@@ -551,10 +559,13 @@ void followLines(uint8_t dir, byte irSave, bool drive) {
     if(drive)
       updateSonar();
     else
-      if(ir[1] & ir[2])
-        break;
-  } while(!drive | ((dist = distance[dir == BACKWARD ? 0 : 2]) > 5 | dist == 0));
-  //Serial.println(dist);
+      if(ir[1])
+        if(!checkBack)
+          break;
+        else if(checkBack & ir[4])
+          break;
+
+  } while(!drive | ((dist = distance[dir == BACKWARD ? 0 : 2]) > 5));
   if(drive)
     delay(50);
   dirDrive(); //stop when done
