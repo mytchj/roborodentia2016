@@ -460,8 +460,8 @@ void serialDo() {
     
 	case 'n': game(); break;  
     
-    case 'q': followLines(FORWARD, 0);                        break;
-    case 'w': followLines(BACKWARD, 0);                        break;
+ //   case 'q': followLines(FORWARD, 0);                        break;
+ //   case 'w': followLines(BACKWARD, 0);                        break;
     case '[': spinDrive(175, true);              break;
     case ']': spinDrive(175, false);              break;
     case 'r': sonarDrive(XDIR, FORWARD);              break;
