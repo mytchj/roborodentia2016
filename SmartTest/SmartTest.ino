@@ -60,6 +60,7 @@ void setup() {
 }
 
 void loop() {
+ // game();
   if (digitalRead(BUTTONPIN) && millis() - startTime > 10000) {    
     #if DEBUG_ENABLED
       Serial.println("Restarting");
@@ -253,7 +254,7 @@ void turnDrive(uint8_t dir, bool ninety){
     hm[0]->drive(HALF_SPEED + 20, FORWARD);
     hm[1]->drive(HALF_SPEED, BACKWARD);
     hm[2]->drive(HALF_SPEED + 20, FORWARD);
-    delay(200);
+    delay(250);
   }
   delay(1000);
   if(ninety)
@@ -339,46 +340,52 @@ void deposit(uint8_t num) {
 }
 
 void game() {
+  int i = 2;
   while(!digitalRead(BUTTONPIN));
     Serial.println("FIGHT!");
 
-
   //PICKUP RING CODE HERE
-
+  followLines(FORWARD);
+  delay(50);
+  followLines(FORWARD, GORIGHT, true);
+  delay(50);
+  followLines(FORWARD, GOLEFT, true, true);
+  delay(1000);
   
+
   turnDrive(FRONTRIGHT);
   delay(100);
   followLines(FORWARD, GORIGHT);
 
   delay(1000); // DEPOSIT RING CODE HERE
 
+while(i--){
   turnDrive(FRONTRIGHT, true);
   followLines(FORWARD, GORIGHT, false);
-  dirDrive(XDIR, FORWARD, HALF_SPEED);
-  delay(200);
+  delay(100);
+  dirDrive(YDIR, FORWARD, HALF_SPEED);
+  delay(150);
   followLines(FORWARD, GORIGHT, false, true);
   delay(100);
   followLines(FORWARD, GOLEFT, false, true);
-  delay(100);
-  followLines(FORWARD, GORIGHT, false, true);
-  delay(100);
-  followLines(FORWARD, GOLEFT, false, true);
+  followLines(FORWARD);
 
   delay(1000); // Pickup Ring code here
 
   turnDrive(FRONTLEFT);
-  followLines(FORWARD, GOLEFT, false);
-  followLines(FORWARD, GORIGHT, false);
-  followLines(FORWARD, GOLEFT);
+  followLines(FORWARD, GOLEFT, false, true);
+  //followLines(FORWARD, GORIGHT, false, true);
+  followLines(FORWARD);
 
   delay(1000); // Drop ring code here
+}
 
   turnDrive(FRONTRIGHT, true);
   followLines(FORWARD, GORIGHT, false);
-  dirDrive(XDIR, FORWARD, HALF_SPEED);
+  dirDrive(YDIR, FORWARD, HALF_SPEED);
   delay(200);
   followLines(FORWARD, GORIGHT, false, true);
-  delay(100);
+  delay(200);
   followLines(FORWARD, GOLEFT, false, true);
   delay(100);
   followLines(FORWARD, GORIGHT, false, true);
@@ -391,9 +398,10 @@ void game() {
   turnDrive(FRONTRIGHT);
   delay(100);
   turnDrive(FRONTRIGHT);
-  //followLines(FORWARD, GORIGHT, false);  
+  followLines(FORWARD, GORIGHT, false);  
+  
   followLines(FORWARD, GOLEFT, false);
-  followLines(FORWARD, GORIGHT, 0);
+  followLines(FORWARD, GORIGHT);
 
   //Drop off ring code here
 }
@@ -459,9 +467,9 @@ void serialDo() {
     
     
 	case 'n': game(); break;  
-    
- //   case 'q': followLines(FORWARD, 0);                        break;
- //   case 'w': followLines(BACKWARD, 0);                        break;
+    case 'k':   dirDrive(YDIR, FORWARD, HALF_SPEED); break;
+//    case 'q': followLines(FORWARD, 0);                        break;
+//    case 'w': followLines(BACKWARD, 0);                        break;
     case '[': spinDrive(175, true);              break;
     case ']': spinDrive(175, false);              break;
     case 'r': sonarDrive(XDIR, FORWARD);              break;
