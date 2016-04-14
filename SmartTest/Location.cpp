@@ -100,7 +100,7 @@ boolean* Location::updateInfrared() {
 }
 
 bool Location::irMap(int luminosity) {
-  if (luminosity > 800)
+  if (luminosity > 869)
     return true;
   return false;
 }
