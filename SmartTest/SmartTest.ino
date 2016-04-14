@@ -8,20 +8,16 @@
 // Motor & Servo Globals
 Servo hservo[2];
 Servo cservo[3];
-AF_DCMotor motor1(4);
-AF_DCMotor motor2(2);
-AF_DCMotor motor3(3);
+AF_DCMotor motor1(2);
+AF_DCMotor motor2(3);
+AF_DCMotor motor3(4);
 AF_DCMotor *slide[SERVOCOUNT] = {&motor1, &motor2, &motor3};
 
 static int startTime;
 static uint8_t* distance; 
-static boolean* ir; //[IRCOUNT];    
-static uint8_t clampStatus[SERVOCOUNT] = {STOP, STOP, STOP};
-
-// Usage example
-  //distance = Location::updateSonar();
-  //ir = Location::updateInfrared();
-  
+static boolean* ir; //[IRCOUNT];
+static uint8_t clampStatus[SERVOCOUNT] = {STOP, STOP, STOP};  
+static boolean cservoAttached[SERVOCOUNT];
 
 #if DEBUG_ENABLED
 static bool joyStickEnabled = false;
@@ -46,12 +42,13 @@ void setup() {
   pinMode(LEDPIN, OUTPUT);
   Location::Init();
 
+  // Wait for start
   //while (!digitalRead(BUTTONPIN));
-
+  
   startTime = millis();
   
-  lift(1, RELEASE);
   lift(0, RELEASE);
+  lift(1, RELEASE);
   lift(2, RELEASE);
 
 #if DEBUG_ENABLED
@@ -60,17 +57,18 @@ void setup() {
 }
 
 void loop() {
- // game();
   if (digitalRead(BUTTONPIN) && millis() - startTime > 10000) {    
     #if DEBUG_ENABLED
       Serial.println("Restarting");
     #endif
-    restart();
+    startTime = millis();
   }
+  
   /*
   if (millis() - startTime > 179000) // Stop 1 second shy of 3 minutes
     endMatch();
-*/
+  */
+
 #if DEBUG_ENABLED
 
   if (joyStickEnabled) {
@@ -83,25 +81,10 @@ void loop() {
 
 #else
 
-  dirDrive(XDIR, BACKWARD, FULL_SPEED);
-  delay(500);
-  dirDrive(XDIR, BACKWARD, HALF_SPEED);
-  delay(500);
-  dirDrive();
-  delay(500);
-  dirDrive(XDIR, FORWARD, FULL_SPEED);
-  delay(500);
-  dirDrive(XDIR, FORWARD, HALF_SPEED);
-  delay(500);
-
+  game();
 
 #endif    
 
-}
-
-void restart() {
-  digitalWrite(LEDPIN, LOW);
-  asm volatile("  jmp 0"); // do not trust the jump
 }
 
 void endMatch() {
@@ -110,14 +93,13 @@ void endMatch() {
   #endif
   dirDrive();
   hservoDetach();
-  for (;;) {
-    toggleLED();
-    if (digitalRead(BUTTONPIN)) {    
+  toggleLED();
+  while (!digitalRead(BUTTONPIN)) {
     #if DEBUG_ENABLED
       Serial.println("Alert: Restarting");
     #endif
-    restart();
-  }
+    digitalWrite(LEDPIN, LOW);
+    startTime = millis();
   }
 }
 
@@ -138,13 +120,21 @@ void lift(uint8_t selector, uint8_t pos) {
 
 // select state manually
 void clamp(uint8_t selector, uint8_t state) {
+  // Stupid backwards one
+  if (selector == 2) {
+    if(state == CLOSE)
+      state = OPEN;
+    else if(state == OPEN)
+      state = CLOSE; 
+  }
+
   if (state == CLOSE) {
     cservoAttach(selector);
     cservo[selector].write(0);
     clampStatus[selector] = CLOSE;
   } else if (state == OPEN) {
     cservoAttach(selector);
-    cservo[selector].write(69);
+    cservo[selector].write(60);
     clampStatus[selector] = OPEN;
   } else if (state == STOP) {
     cservoDetach(selector);
@@ -153,12 +143,15 @@ void clamp(uint8_t selector, uint8_t state) {
 }
 
 void cservoAttach(uint8_t selector) {
-  if (selector == 0)
-    cservo[0].attach(9);
-  else if (selector == 1)
-    cservo[1].attach(10);
-  else if (selector == 2)
-    cservo[2].attach(13);
+  if (!cservoAttached[selector]) {
+    if (selector == 0)
+      cservo[0].attach(9);
+    else if (selector == 1)
+      cservo[1].attach(10);
+    else if (selector == 2)
+      cservo[2].attach(13);
+    cservoAttached[selector] = true;
+  }
 }
 
 void cservoAttach() {
@@ -168,7 +161,10 @@ void cservoAttach() {
 }
 
 void cservoDetach(uint8_t selector) {
-  cservo[selector].detach();
+  if (cservoAttached[selector]) {
+    cservo[selector].detach();
+    cservoAttached[selector] = false;
+  }
 }
 
 void cservoDetach() {
@@ -242,21 +238,21 @@ void turnDrive(uint8_t dir) {
   turnDrive(dir, false);
 }
 
-
 void turnDrive(uint8_t dir, bool ninety){
-    if (dir == FRONTLEFT) { 
+  if (dir == FRONTLEFT) { 
     hm[0]->drive(200, BACKWARD);
     hm[1]->drive(MEH_SPEED, FORWARD);
     hm[2]->drive(FULL_SPEED, BACKWARD);
     hm[3]->drive(MEH_SPEED, BACKWARD);
+    delay(1000);
   }
   else if (dir == FRONTRIGHT) {
     hm[0]->drive(HALF_SPEED + 20, FORWARD);
     hm[1]->drive(HALF_SPEED, BACKWARD);
     hm[2]->drive(HALF_SPEED + 20, FORWARD);
-    delay(250);
+    delay(1200);
   }
-  delay(1000);
+  
   if(ninety)
     followLines(FORWARD, GORIGHT);
   dirDrive();
@@ -310,75 +306,97 @@ void toggleLED() {
   digitalWrite(LEDPIN, status = !status);
 }
 
-void withdraw(uint8_t num) {
-  // Get others out of the way
-  lift(num, BACKWARD);
-  lift((num + 1) % POTCOUNT, FORWARD);
-  lift((num + 2) % POTCOUNT, FORWARD);
-  delay(690);
+void set() {
+  lift(0, FORWARD);
+  //clamp(0, CLOSE);
 
-  // Grab
-  clamp(num, CLOSE);
-  delay(690);
-  lift(num, FORWARD);
-  delay(690);
+  lift(1, FORWARD);
+  //clamp(1, CLOSE);
+  
+  lift(2, FORWARD);
+  //clamp(2, CLOSE);
 
-  // Release Everyone
-  lift((num + 1) % POTCOUNT, RELEASE);
-  lift((num + 2) % POTCOUNT, RELEASE);  
-  lift(num, RELEASE);
+  delay (800);
+
+  lift(0, RELEASE);
+  lift(1, RELEASE);
+  lift(2, RELEASE);
+  //clamp(0, STOP);
+  //clamp(1, STOP);
+  //clamp(2, STOP);
 }
 
-void deposit(uint8_t num) {
-  lift(num, BACKWARD);
-  clamp(num, OPEN);
-  delay(690);
-  lift(num, FORWARD);
-  delay(690 / 2);
-  clamp(num, CLOSE);
-  delay(690 / 2);
+void get(uint8_t num) {
+  //clamp(num, OPEN);     // open
+  delay(800);
+  lift(num, BACKWARD);  // move down
+  delay(700);
+  //clamp(num, CLOSE);    // close
+  delay(400);
+  lift(num, FORWARD);   // move up
+
+  //TODO this can be done later!
+  delay(700);
+  lift(num, RELEASE);   // Release
+}
+
+void put(uint8_t num) {
+  lift(num, BACKWARD);  // move down
+  delay(800);
+  //clamp(num, OPEN);     // open
+  delay(700);
+  lift(num, FORWARD);   // move up
+  delay(400);
+  //clamp(num, CLOSE);    // close
+
+  //TODO this can be done later!
+  delay(300);
+  lift(num, RELEASE);   // Release
+  //clamp(num, STOP);  // Release
 }
 
 void game() {
   int i = 2;
   while(!digitalRead(BUTTONPIN));
-    Serial.println("FIGHT!");
+  Serial.println("FIGHT!");
 
   //PICKUP RING CODE HERE
-  followLines(FORWARD);
-  delay(50);
-  followLines(FORWARD, GORIGHT, true);
-  delay(50);
-  followLines(FORWARD, GOLEFT, true, true);
-  delay(1000);
-  
 
+  set();
+
+  followLines(FORWARD);
+  get(1);
+  
   turnDrive(FRONTRIGHT);
   delay(100);
   followLines(FORWARD, GORIGHT);
 
+  put(1);
   delay(1000); // DEPOSIT RING CODE HERE
 
-while(i--){
-  turnDrive(FRONTRIGHT, true);
-  followLines(FORWARD, GORIGHT, false);
-  delay(100);
-  dirDrive(YDIR, FORWARD, HALF_SPEED);
-  delay(150);
-  followLines(FORWARD, GORIGHT, false, true);
-  delay(100);
-  followLines(FORWARD, GOLEFT, false, true);
-  followLines(FORWARD);
-
-  delay(1000); // Pickup Ring code here
-
-  turnDrive(FRONTLEFT);
-  followLines(FORWARD, GOLEFT, false, true);
-  //followLines(FORWARD, GORIGHT, false, true);
-  followLines(FORWARD);
-
-  delay(1000); // Drop ring code here
-}
+  while(i--){
+    turnDrive(FRONTRIGHT, true);
+    followLines(FORWARD, GORIGHT, false);
+  
+    delay(100);
+    dirDrive(YDIR, FORWARD, HALF_SPEED);
+  
+    delay(150);
+    followLines(FORWARD, GORIGHT, false, true);
+    delay(100);
+    followLines(FORWARD, GOLEFT, false, true);
+    followLines(FORWARD);
+  
+    delay(1000); // Pickup Ring code here
+  
+    turnDrive(FRONTLEFT);
+    followLines(FORWARD, GOLEFT, false, true);
+  
+    //followLines(FORWARD, GORIGHT, false, true);
+    followLines(FORWARD);
+  
+    delay(1000); // Drop ring code here
+  }
 
   turnDrive(FRONTRIGHT, true);
   followLines(FORWARD, GORIGHT, false);
@@ -386,11 +404,13 @@ while(i--){
   delay(200);
   followLines(FORWARD, GORIGHT, false, true);
   delay(200);
+
   followLines(FORWARD, GOLEFT, false, true);
   delay(100);
   followLines(FORWARD, GORIGHT, false, true);
   delay(100);
   followLines(FORWARD, GOLEFT, false, true);
+  followLines(FORWARD);
 
   delay(1000); //pickup rings here
   
@@ -405,80 +425,21 @@ while(i--){
 
   //Drop off ring code here
 }
-
-void laps(uint8_t numberOfLaps) {
-  while (numberOfLaps--) {
-    Serial.println("FollowForward");
-    followLines(FORWARD, 0);
-    followLines(FORWARD, 0);
-    Serial.println("Withdraw");
-    withdraw(1); //temp value
-    
-    Serial.println("FollowBackward");
-    followLines(BACKWARD, 0);
-    followLines(BACKWARD, 0);
-    Serial.println("Deposit");
-    deposit(1); //temp value
-  }
-}
-
-void testLift() {
-  uint8_t i = 0;
-  while (i < POTCOUNT) {
-    lift(i, FORWARD);
-    delay(1000);
-    lift(i, RELEASE);
-    delay(1000);
-    lift(i, BACKWARD);
-    delay(1000);
-    lift(i, RELEASE);
-    delay(1000);
-    i++;
-  }
-  
-}
-
 #if DEBUG_ENABLED
 
 void serialDo() {
   switch (incomingByte) {
-    case '`': hump(FORWARD);      break;
-    case '1': hump(BACKWARD);     break;
-    case '2': hump(BRAKE);        break;
-    case '6': testLift();         break;
-    case '9': laps(1);             break;
+    case 'n': game(); break;
+    case 'c': Location::printSonar(); break;
 
-    case 'a': clamp(1, OPEN);            break;
-    case 's': clamp(1, CLOSE);            break;
-    case 'd': clamp(1, STOP);            break;
+    case '1': get(0); break;  
+    case '2': get(1); break;  
+    case '3': get(2); break;  
+    case '4': put(0); break;  
+    case '5': put(1); break;  
+    case '6': put(2); break;  
+    case '7': set(); break;  
     
-    case 'z': Location::printInfrared();            break;
-    case 'x': Location::printRawInfrared();         break;
-    case 'c': Location::printSonar();               break;
-    case 'v': updateSonar();               break;
-
-    case 'm' : turnDrive(FRONTLEFT); break;
-    case 'q': followLines(FORWARD, GORIGHT);                        break;
-    case 'w': followLines(BACKWARD, GORIGHT);                        break;
-    case 'e': followLines(FORWARD, GOLEFT, false); break;
-
-    case 'i': turnDrive(FRONTRIGHT); break;
-    case 'g': followLines(FORWARD, GORIGHT, false); break;
-    
-    
-	case 'n': game(); break;  
-    case 'k':   dirDrive(YDIR, FORWARD, HALF_SPEED); break;
-//    case 'q': followLines(FORWARD, 0);                        break;
-//    case 'w': followLines(BACKWARD, 0);                        break;
-    case '[': spinDrive(175, true);              break;
-    case ']': spinDrive(175, false);              break;
-    case 'r': sonarDrive(XDIR, FORWARD);              break;
-    case 't': sonarDrive(XDIR, BACKWARD);              break;
-    
-    case 'y': sonarDrive(YDIR, FORWARD);              break;
-    case 'u': sonarDrive(YDIR, BACKWARD);              break;
-    case 'p': dirDrive(XDIR, FORWARD, FULL_SPEED);  break;
-
   }
 }
 
@@ -516,7 +477,6 @@ void followLines(uint8_t dir, byte irSave, bool drive, bool checkBack) {
     else
       speed = 0;
 
-    //  Serial.println(speed);
     //THIS CHECKS THE FRONT IR's
     if (ir[0] | ir[1] | ir[2]) { // Any of the front are on
       if (!ir[2]){
@@ -547,13 +507,11 @@ void followLines(uint8_t dir, byte irSave, bool drive, bool checkBack) {
         singleDrive(0, BACKWARD, SLOW_SPEED);
         irSave |= BACKLEFT;
         irSave &= ~BACKRIGHT;
-        }
-      else if (!ir[3]){
+      } else if (!ir[3]){
         singleDrive(0, FORWARD, SLOW_SPEED);
         irSave |= BACKRIGHT;
         irSave &= ~BACKLEFT;
-        }
-      else
+      } else
         dirDrive(XDIR, dir, speed);
     }
     else {
@@ -564,32 +522,41 @@ void followLines(uint8_t dir, byte irSave, bool drive, bool checkBack) {
       if(drive)
         dirDrive(XDIR, dir, MEH_SPEED); //otherwise stop
     }
-    if(drive)
+    if(drive) {
       updateSonar();
-    else
-      if(ir[1])
+    } else if (ir[1]) {
         if(!checkBack)
           break;
         else if(checkBack & ir[4])
           break;
-
+    }
   } while(!drive | ((dist = distance[dir == BACKWARD ? 0 : 2]) > 5));
+  // TODO Matt why is this here?
   if(drive)
     delay(50);
   dirDrive(); //stop when done
 }
 
 void shiftOver(uint8_t axis, uint8_t dir, uint8_t farther) {
+  // Find sonars on axis of motion (aka black mathgic)
+  uint8_t bestSonar = (2*dir-axis)%4;
+  boolean opposite = false;
   updateSonar();
-  uint8_t where = distance[FIND_SONAR] - farther;
-  while (distance[FIND_SONAR] != where) {
-    stabilize(axis, dir, where);
+
+  if (distance[bestSonar] > distance[((2*dir - axis) + 2) % 4]) {
+    // You are now using the opposite sonar because its reading is closer and therefore more reliable
+    bestSonar = (bestSonar + 2) % 4;
+    opposite = true; 
+  }
+  
+  uint8_t where = distance[bestSonar] + (opposite ? 1 : -1) * farther;
+  while (distance[bestSonar] != where) {
+    stabilize(axis, opposite ? 0x03 ^ dir : dir, bestSonar, where);
     updateSonar();
   }
 }
 
-void stabilize(uint8_t axis, uint8_t dir, uint8_t where) {
-  uint8_t fS = FIND_SONAR;
+void stabilize(uint8_t axis, uint8_t dir, uint8_t fS, uint8_t where) {
   updateSonar();
   while (distance[fS] != where) {
     Serial.print(distance[fS]);
@@ -610,8 +577,7 @@ void sonarDrive(uint8_t axis, uint8_t dir) {
   dirDrive();
   updateSonar();
 
-
-  while ((x = distance[FIND_SONAR]) > 3) {
+  while ((x = distance[(2*dir-axis)%4]) > 3) {
 
     if (x > 25)
       dirDrive(axis, dir, FULL_SPEED);
