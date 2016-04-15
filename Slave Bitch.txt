@@ -1,0 +1,84 @@
+#include <Servo.h>
+
+#define MOOSIC incomingByte >> 6 & 3
+#define CLAMP2 incomingByte >> 4 & 3
+#define CLAMP1 incomingByte >> 2 & 3
+#define CLAMP0 incomingByte & 3
+#define OPEN 1
+#define CLOSE 2
+#define STOP 3
+#define SERVOCOUNT 3
+
+Servo cservo[3];
+static boolean cservoAttached[SERVOCOUNT];
+
+void setup() {
+  Serial1.begin(115200);
+  Serial.begin(115200);
+}
+
+void loop() {
+  byte incomingByte;
+  if(Serial1.available() > 0){
+    incomingByte = Serial1.read();
+    Serial.println(incomingByte, BIN);
+    if(CLAMP0){
+      clamp(0, CLAMP0);
+    }
+    if(CLAMP1){
+      clamp(1, CLAMP1);
+    }
+    if(CLAMP2){
+      clamp(2, CLAMP2);
+    }
+  }
+}
+
+// select state manually
+void clamp(uint8_t selector, uint8_t state) {
+  if (state == CLOSE) {
+    cservoAttach(selector);
+    cservo[selector].write(selector == 2 ? 60 : 0);
+  } 
+  else if (state == OPEN) {
+    cservoAttach(selector);
+    cservo[selector].write(selector != 2 ? 60 : 0);
+  } 
+  else if (state == STOP) {
+    cservoAttach(selector);
+    cservo[selector].write(selector == 2 ? 60 : 0);
+    delay(300);
+    cservoDetach(selector);
+  }
+}
+
+void cservoAttach(uint8_t selector) {
+  if (!cservoAttached[selector]) {
+    if (selector == 0)
+      cservo[0].attach(4);
+    else if (selector == 1)
+      cservo[1].attach(7);
+    else if (selector == 2)
+      cservo[2].attach(11);
+    cservoAttached[selector] = true;
+  }
+}
+
+void cservoAttach() {
+  cservoAttach(0);
+  cservoAttach(1);
+  cservoAttach(2);
+}
+
+void cservoDetach(uint8_t selector) {
+  if (cservoAttached[selector]) {
+    cservo[selector].detach();
+    cservoAttached[selector] = false;
+  }
+}
+
+void cservoDetach() {
+  cservoDetach(0);
+  cservoDetach(1);
+  cservoDetach(2);
+}
