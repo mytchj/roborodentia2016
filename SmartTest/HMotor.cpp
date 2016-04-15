@@ -1,8 +1,5 @@
-// Robot Localization via sonar
 #include <Arduino.h>
 #include "HMotor.h"
-#include "AFMotor.h"
-#include "NewPing.h"
 #include "Location.h"
 #include "config.h"
 

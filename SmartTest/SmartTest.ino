@@ -1,30 +1,21 @@
 #include <Math.h>
-#include <Servo.h>
 #include <AFMotor.h>
 #include "HMotor.h"
 #include "Location.h"
 #include "config.h"
 
 // Motor & Servo Globals
-Servo hservo[2];
-Servo cservo[3];
 AF_DCMotor motor1(2);
 AF_DCMotor motor2(3);
 AF_DCMotor motor3(4);
 AF_DCMotor *slide[SERVOCOUNT] = {&motor1, &motor2, &motor3};
 
 static int startTime;
-static uint8_t* distance; 
 static boolean* ir; //[IRCOUNT];
-static uint8_t clampStatus[SERVOCOUNT] = {STOP, STOP, STOP};  
-static boolean cservoAttached[SERVOCOUNT];
 
 #if DEBUG_ENABLED
-static bool joyStickEnabled = false;
-static int* joyXYB; //[JOYCOUNT];
 static char incomingByte;
 #endif 
-
 
 HMotor hmotor1(39, 38, 2);
 HMotor hmotor2(40, 41, 45);
@@ -47,8 +38,6 @@ void setup() {
   // Wait for start
   //while (!digitalRead(BUTTONPIN));
   
-  startTime = millis();
-  
   lift(0, RELEASE);
   lift(1, RELEASE);
   lift(2, RELEASE);
@@ -59,7 +48,6 @@ void setup() {
 }
 
 void loop() {
-  game();
   if (digitalRead(BUTTONPIN) && millis() - startTime > 10000) {    
     #if DEBUG_ENABLED
       Serial.println("Restarting");
@@ -73,21 +61,11 @@ void loop() {
   */
 
 #if DEBUG_ENABLED
-
-  if (joyStickEnabled) {
-    joyXYB = Location::updateJoystick();
-    joyStickDrive();
-  }
-  
   if (serialRead())
     serialDo();
-
 #else
-
   game();
-
 #endif    
-
 }
 
 void endMatch() {
@@ -95,7 +73,7 @@ void endMatch() {
     Serial.println("Alert: Match Over");
   #endif
   dirDrive();
-  hservoDetach();
+  Serial1.write(0b0011111111);
   toggleLED();
   while (!digitalRead(BUTTONPIN)) {
     #if DEBUG_ENABLED
@@ -106,95 +84,9 @@ void endMatch() {
   }
 }
 
-void hump(int direction) {
-  if (direction < BRAKE) {
-    hservoAttach();
-    hservo[(direction + 1) % 2].writeMicroseconds(1300);
-    hservo[direction % 2].writeMicroseconds(1700); 
-  } else {
-    hservoDetach();
-  }
-}
-
 void lift(uint8_t selector, uint8_t pos) {
   slide[selector]->setSpeed(FULL_SPEED);
   slide[selector]->run(pos);
-}
-
-// select state manually
-void clamp(uint8_t selector, uint8_t state) {
-  // Stupid backwards one
-  if (selector == 2) {
-    if(state == CLOSE)
-      state = OPEN;
-    else if(state == OPEN)
-      state = CLOSE; 
-  }
-
-  if (state == CLOSE) {
-    cservoAttach(selector);
-    cservo[selector].write(0);
-    clampStatus[selector] = CLOSE;
-  } else if (state == OPEN) {
-    cservoAttach(selector);
-    cservo[selector].write(60);
-    clampStatus[selector] = OPEN;
-  } else if (state == STOP) {
-    cservoDetach(selector);
-    clampStatus[selector] = STOP;
-  }
-}
-
-void cservoAttach(uint8_t selector) {
-  if (!cservoAttached[selector]) {
-    if (selector == 0)
-      cservo[0].attach(9);
-    else if (selector == 1)
-      cservo[1].attach(10);
-    else if (selector == 2)
-      cservo[2].attach(13);
-    cservoAttached[selector] = true;
-  }
-}
-
-void cservoAttach() {
-  cservoAttach(0);
-  cservoAttach(1);
-  cservoAttach(2);
-}
-
-void cservoDetach(uint8_t selector) {
-  if (cservoAttached[selector]) {
-    cservo[selector].detach();
-    cservoAttached[selector] = false;
-  }
-}
-
-void cservoDetach() {
-  cservoDetach(0);
-  cservoDetach(1);
-  cservoDetach(2);
-}
-
-void hservoAttach() {
-  hservo[0].attach(40);
-  hservo[1].attach(41);
-}
-
-void hservoDetach() {
-  hservo[0].detach();
-  hservo[1].detach();
-}
-
-void avoidDrive(uint8_t* dist) {
-  for (int i = 0; i < MOTORCOUNT / 2; i++)                                                                                                                                          
-    if((dist[i]) < 5 && (dist[i] > 1)) {
-      hm[(i + MOTORCOUNT + 1) % MOTORCOUNT]->drive(FULL_SPEED, FORWARD);
-      hm[(i + MOTORCOUNT - 1) % MOTORCOUNT]->drive(FULL_SPEED, FORWARD);
-    } else {
-      hm[(i + MOTORCOUNT + 1) % MOTORCOUNT]->drive(0, RELEASE);
-      hm[(i + MOTORCOUNT - 1) % MOTORCOUNT]->drive(0, RELEASE);
-    }
 }
 
 void spinDrive(int degrees, bool direction) {
@@ -250,10 +142,10 @@ void turnDrive(uint8_t dir, bool ninety){
     delay(1000);
   }
   else if (dir == FRONTRIGHT) {
-    hm[0]->drive(FULL_SPEED, FORWARD);
-    hm[1]->drive(FULL_SPEED, BACKWARD);
-    hm[2]->drive(FULL_SPEED, FORWARD);
-    delay(600);
+    hm[0]->drive(HALF_SPEED + 20, FORWARD);
+    hm[1]->drive(HALF_SPEED, BACKWARD);
+    hm[2]->drive(HALF_SPEED + 20, FORWARD);
+    delay(1200);
   }
   
   if(ninety)
@@ -262,12 +154,6 @@ void turnDrive(uint8_t dir, bool ninety){
 }
 
 #if DEBUG_ENABLED
-
-void joyStickDrive() {
-  for (int i = 0; i < MOTORCOUNT; i++)                                                                                                                                          
-    hm[i]->drive(abs(abs(joyXYB[i%2]) - 1), Location::joystickDirection(joyXYB[i%2]));
-}
-
 bool serialRead() {
   incomingByte = 0;
   if (Serial.available() > 0) {
@@ -344,6 +230,7 @@ void put(uint8_t num) {
 }
 
 void game() {
+  startTime = millis();
   int i = 2;
   while(!digitalRead(BUTTONPIN));
 
@@ -354,17 +241,12 @@ void game() {
 
   // Go to center (first action)
   followLines(FORWARD);
-    // get middle
-    get(1);
-    shiftOver(YDIR, FORWARD, 40);
-    get(2);
+  get(1);
 
   turnDrive(FRONTRIGHT);
   liftAll(100);
   followLines(FORWARD, GORIGHT);
-    put(1);
-    shiftOver(YDIR, FORWARD, 10);
-    put(2);
+  put(1);
 
   while(i--) {
     turnDrive(FRONTRIGHT, true);
@@ -379,9 +261,7 @@ void game() {
     followLines(FORWARD, GOLEFT, false, true);
     followLines(FORWARD);
   
-      get(1);
-      shiftOver(YDIR, FORWARD, 40);
-      get(2);
+    get(1);
       
     turnDrive(FRONTLEFT);
     followLines(FORWARD, GOLEFT, false, true);
@@ -423,21 +303,12 @@ void game() {
 void serialDo() {
   switch (incomingByte) {
     case 'n': game(); break;
-    case 'c': Location::printSonar(); break;
-
-    case '1': get(0); break;  
-    case '2': get(1); break;  
-    case '3': get(2); break;  
-    case '4': put(0); break;  
-    case '5': put(1); break;  
-    case '6': put(2); break;
-    
+    case 'c': Location::printInfrared(); break;
+    case 'v': Location::printRawInfrared(); break;
+    case '1': followLines(FORWARD, GOLEFT); break;
   }
 }
 
-void toggleJoystickControl() {
-  joyStickEnabled = !joyStickEnabled;
-}
 #endif
 
 void followLines(uint8_t dir) {
@@ -457,6 +328,7 @@ void followLines(uint8_t dir, byte irSave, bool drive, bool checkBack) {
   int dist = SLOW_SPEED, speed;
   if(drive)
     dirDrive(XDIR, dir, HALF_SPEED);
+ 
   do{
     ir = Location::updateInfrared();
     if(drive){
@@ -485,8 +357,11 @@ void followLines(uint8_t dir, byte irSave, bool drive, bool checkBack) {
         irSave |= FRONTRIGHT;
         irSave &= ~FRONTLEFT;
       }
-      else
+      else{
+        //singleDrive(2, BRAKE);
+        //singleDrive(2, RELEASE);
         dirDrive(XDIR, dir, speed);
+      }
     }
     else{
       if(irSave & FRONTLEFT)
@@ -503,12 +378,15 @@ void followLines(uint8_t dir, byte irSave, bool drive, bool checkBack) {
         singleDrive(0, BACKWARD, SLOW_SPEED);
         irSave |= BACKLEFT;
         irSave &= ~BACKRIGHT;
-      } else if (!ir[3]){
+      } 
+      else if (!ir[3]){
         singleDrive(0, FORWARD, SLOW_SPEED);
         irSave |= BACKRIGHT;
         irSave &= ~BACKLEFT;
-      } else
+      } 
+      else{
         dirDrive(XDIR, dir, speed);
+      }
     }
     else {
       if(irSave & BACKLEFT)
@@ -519,103 +397,19 @@ void followLines(uint8_t dir, byte irSave, bool drive, bool checkBack) {
         dirDrive(XDIR, dir, MEH_SPEED); //otherwise stop
     }
     if(drive) {
-      updateSonar();
+      //  REEEVAMP
     } else if (ir[1]) {
         if(!checkBack)
           break;
         else if(checkBack & ir[4])
           break;
     }
-  } while(!drive | ((dist = distance[dir == BACKWARD ? 0 : 2]) > 5));
-  // TODO Matt why is this here?
+  } while(!drive | (1/* not button press */)); // REEEVAMP
+
   if(drive){
     dirDrive(XDIR, dir, MEH_SPEED);
     liftAll(100);
   }
+
   dirDrive(); //stop when done
-}
-
-void shiftOver(uint8_t axis, uint8_t dir, uint8_t farther) {
-  // Find sonars on axis of motion (aka black mathgic)
-  uint8_t bestSonar = (2*dir-axis)%4;
-  boolean opposite = false;
-  updateSonar();
-
-  if (distance[bestSonar] > distance[((2*dir - axis) + 2) % 4]) {
-    // You are now using the opposite sonar because its reading is closer and therefore more reliable
-    bestSonar = (bestSonar + 2) % 4;
-    opposite = true; 
-  }
-  
-  uint8_t where = distance[bestSonar] + (opposite ? 1 : -1) * farther;
-  while (distance[bestSonar] != where) {
-    stabilize(axis, opposite ? 0x03 ^ dir : dir, bestSonar, where);
-    updateSonar();
-  }
-}
-
-void stabilize(uint8_t axis, uint8_t dir, uint8_t fS, uint8_t where) {
-  updateSonar();
-  while (distance[fS] != where) {
-    Serial.print(distance[fS]);
-    Serial.print("   ");
-    Serial.println(where);
-    if (distance[fS] > where)
-      dirDrive(axis, dir, SLOW_SPEED);
-    else
-      dirDrive(axis, dir ^ 0x03, SLOW_SPEED);
-    updateSonar();
-  }
-  dirDrive();
-  Serial.print(distance[fS]);
-}
-
-void sonarDrive(uint8_t axis, uint8_t dir) {
-  int x;
-  dirDrive();
-  updateSonar();
-
-  while ((x = distance[(2*dir-axis)%4]) > 3) {
-
-    if (x > 25)
-      dirDrive(axis, dir, FULL_SPEED);
-    else
-      dirDrive(axis, dir, SLOW_SPEED);
-    updateSonar();
-  }
-  dirDrive(); //stop when done
-}
-void updateSonar() {
-  distance = Location::updateSonar();
-}
-
-void updateLocation() {
-  updateSonar();
-  
-  // TODO this code incorrectly assumes a certain orientation
-  // because the robot turns, the coordinate space will become shifted, dislocating fixed points
-  Location::myLoc.x = distance[0] - distance[2];
-  Location::myLoc.y = distance[1] - distance[3];
-}
-
-uint8_t moveTo(locationCoordinates toLoc) {
-  updateLocation();
-  dirDrive(); //stop when done
-  
-  while (XCLOSE() || YCLOSE()) {
-    if (XCLOSE())
-      dirDrive(XDIR, Location::myLoc.x > toLoc.x);
-    else
-      dirDrive(XDIR);
-      
-    if (YCLOSE())
-      dirDrive(YDIR, Location::myLoc.y > toLoc.y);
-    else
-      dirDrive(YDIR);
-      
-    updateLocation();
-  }
-  dirDrive(); //stop when done
-  
-  return 0;
 }
