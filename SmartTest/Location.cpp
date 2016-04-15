@@ -5,13 +5,31 @@
 
 // IRsensors
 static const int irRead[IRCOUNT] = {A0, A1, A2, A3, A4, A5};
+volatile long int Location::encoderCount = 0;
 int Location::irRaw[IRCOUNT];
 boolean Location::ir[IRCOUNT];
   
 void Location::Init(void) {
+  pinMode(ENCODERPIN, INPUT_PULLUP);
+  attachInterrupt(digitalPinToInterrupt(ENCODERPIN), encoderISR, CHANGE);
   // IR Sensors
   for (int i = 0; i < IRCOUNT; i++)
     pinMode(irRead[i], INPUT);
+}
+
+void Location::encoderISR() {
+  Location::encoderCount++;
+}
+
+int Location::getEncoder() {  
+  return Location::encoderCount;
+}
+
+int Location::printEncoderCount() {  
+#if DEBUG_ENABLED
+  Serial.println(Location::encoderCount);
+#endif
+  return Location::encoderCount;
 }
 
 boolean* Location::updateInfrared() {
@@ -21,7 +39,7 @@ boolean* Location::updateInfrared() {
 }
 
 bool Location::irMap(int luminosity) {
-  if (luminosity > 869)
+  if (luminosity > 850)
     return true;
   return false;
 }

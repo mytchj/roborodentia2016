@@ -15,7 +15,10 @@
 #define SLOW_SPEED 80
 
 #define BUTTONPIN 35
+#define LBUTTON 32
+#define RBUTTON 33
 #define LEDPIN 52
+#define ENCODERPIN 20
 
 #define XDIR 0
 #define YDIR 1

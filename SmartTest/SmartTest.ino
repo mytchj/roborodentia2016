@@ -32,6 +32,8 @@ void setup() {
   Serial1.begin(115200); // talk to other Arduino
 
   pinMode(BUTTONPIN, INPUT);
+  pinMode(LBUTTON, INPUT_PULLUP);
+  pinMode(RBUTTON, INPUT_PULLUP);
   pinMode(LEDPIN, OUTPUT);
   Location::Init();
 
@@ -48,6 +50,7 @@ void setup() {
 }
 
 void loop() {
+  game();
   if (digitalRead(BUTTONPIN) && millis() - startTime > 10000) {    
     #if DEBUG_ENABLED
       Serial.println("Restarting");
@@ -66,6 +69,15 @@ void loop() {
 #else
   game();
 #endif    
+}
+
+int checkButton()  {
+  int button = 0;
+  if(!digitalRead(LBUTTON))
+    button |= 1;
+  if(!digitalRead(RBUTTON))
+    button |= 2;
+  return button; 
 }
 
 void endMatch() {
@@ -134,18 +146,23 @@ void turnDrive(uint8_t dir) {
 }
 
 void turnDrive(uint8_t dir, bool ninety){
-  if (dir == FRONTLEFT) { 
+  turnDrive(dir, ninety, 5000);
+}
+
+void turnDrive(uint8_t dir, bool ninety, int long ticks){
+  int long enC = Location::getEncoder();
+  if (dir == FRONTLEFT) {
     hm[0]->drive(200, BACKWARD);
     hm[1]->drive(MEH_SPEED, FORWARD);
     hm[2]->drive(FULL_SPEED, BACKWARD);
     hm[3]->drive(MEH_SPEED, BACKWARD);
-    delay(1000);
+    while(Location::getEncoder() - enC < ticks);
   }
   else if (dir == FRONTRIGHT) {
     hm[0]->drive(HALF_SPEED + 20, FORWARD);
-    hm[1]->drive(HALF_SPEED, BACKWARD);
+    hm[1]->drive(HALF_SPEED + 10, BACKWARD);
     hm[2]->drive(HALF_SPEED + 20, FORWARD);
-    delay(1200);
+    while(Location::getEncoder() - enC < ticks);
   }
   
   if(ninety)
@@ -209,20 +226,21 @@ void liftAll(unsigned int time) {
 
 void get(uint8_t num) {
   Serial1.write(OPEN << (num * 2));
-  delay(2000);
+  delay(1200);
   lift(num, BACKWARD);  // move down
-  delay(1000);
+  delay(800);
   Serial1.write(CLOSE << (num * 2));
-  delay(2000);
+  delay(1200);
   lift(num, FORWARD);   // move up
-  delay(1500);
+  delay(1000);
   lift(num, RELEASE);   // Release
 }
 
 void put(uint8_t num) {
   lift(num, BACKWARD);  // move down
+  delay(200);
   Serial1.write(OPEN << (num * 2));
-  delay(400);
+  delay(250);
   lift(num, FORWARD);   // move up
   delay(1200);
   Serial1.write(STOP << (num * 2));
@@ -249,7 +267,7 @@ void game() {
   put(1);
 
   while(i--) {
-    turnDrive(FRONTRIGHT, true);
+    turnDrive(FRONTRIGHT, true, 4500);
     followLines(FORWARD, GORIGHT, false);
   
     liftAll(100);
@@ -306,6 +324,9 @@ void serialDo() {
     case 'c': Location::printInfrared(); break;
     case 'v': Location::printRawInfrared(); break;
     case '1': followLines(FORWARD, GOLEFT); break;
+    case '2': Location::printEncoderCount(); break;
+    case '3': dirDrive(YDIR, FORWARD); break;
+    case '4': dirDrive(); break;
   }
 }
 
@@ -325,22 +346,19 @@ void followLines(uint8_t dir, byte irSave, bool drive){
 
 // Runs the front and back
 void followLines(uint8_t dir, byte irSave, bool drive, bool checkBack) {
-  int dist = SLOW_SPEED, speed;
+  int speed;
   if(drive)
     dirDrive(XDIR, dir, HALF_SPEED);
  
   do{
+
+    Serial.println(
     ir = Location::updateInfrared();
     if(drive){
-      speed = (dist << 1) + 60;
-      if(speed > FULL_SPEED)
-        speed = FULL_SPEED;
-      else if(dist < 50) {
-        speed = MEH_SPEED - 20;
+      speed = FULL_SPEED;
         lift(0, FORWARD);
         lift(1, FORWARD);
         lift(2, FORWARD);
-      }
     }
     else
       speed = 0;
@@ -396,15 +414,13 @@ void followLines(uint8_t dir, byte irSave, bool drive, bool checkBack) {
       if(drive)
         dirDrive(XDIR, dir, MEH_SPEED); //otherwise stop
     }
-    if(drive) {
-      //  REEEVAMP
-    } else if (ir[1]) {
-        if(!checkBack)
-          break;
-        else if(checkBack & ir[4])
-          break;
+    if (!drive && ir[1]) {
+      if(!checkBack)
+        break;
+      else if(checkBack & ir[4])
+        break;
     }
-  } while(!drive | (1/* not button press */)); // REEEVAMP
+  } while(!drive | !checkButton());
 
   if(drive){
     dirDrive(XDIR, dir, MEH_SPEED);
