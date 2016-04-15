@@ -34,9 +34,11 @@ HMotor *hm[MOTORCOUNT] = {&hmotor1, &hmotor2, &hmotor3, &hmotor4};
 
 void setup() {
 #if DEBUG_ENABLED
-  Serial.begin(115200);           // set up Serial library at 9600 bps
+  Serial.begin(115200);
   Serial.println("Initializing");
 #endif
+
+  Serial1.begin(115200); // talk to other Arduino
 
   pinMode(BUTTONPIN, INPUT);
   pinMode(LEDPIN, OUTPUT);
@@ -57,13 +59,14 @@ void setup() {
 }
 
 void loop() {
+  game();
   if (digitalRead(BUTTONPIN) && millis() - startTime > 10000) {    
     #if DEBUG_ENABLED
       Serial.println("Restarting");
     #endif
     startTime = millis();
   }
-  
+
   /*
   if (millis() - startTime > 179000) // Stop 1 second shy of 3 minutes
     endMatch();
@@ -247,10 +250,10 @@ void turnDrive(uint8_t dir, bool ninety){
     delay(1000);
   }
   else if (dir == FRONTRIGHT) {
-    hm[0]->drive(HALF_SPEED + 20, FORWARD);
-    hm[1]->drive(HALF_SPEED, BACKWARD);
-    hm[2]->drive(HALF_SPEED + 20, FORWARD);
-    delay(1200);
+    hm[0]->drive(FULL_SPEED, FORWARD);
+    hm[1]->drive(FULL_SPEED, BACKWARD);
+    hm[2]->drive(FULL_SPEED, FORWARD);
+    delay(600);
   }
   
   if(ninety)
@@ -306,96 +309,85 @@ void toggleLED() {
   digitalWrite(LEDPIN, status = !status);
 }
 
-void set() {
+void liftAll(unsigned int time) {
   lift(0, FORWARD);
-  //clamp(0, CLOSE);
-
   lift(1, FORWARD);
-  //clamp(1, CLOSE);
-  
   lift(2, FORWARD);
-  //clamp(2, CLOSE);
-
-  delay (800);
-
+  
+  delay(time);
+  
   lift(0, RELEASE);
   lift(1, RELEASE);
   lift(2, RELEASE);
-  //clamp(0, STOP);
-  //clamp(1, STOP);
-  //clamp(2, STOP);
 }
 
 void get(uint8_t num) {
-  //clamp(num, OPEN);     // open
-  delay(800);
+  Serial1.write(OPEN << (num * 2));
+  delay(2000);
   lift(num, BACKWARD);  // move down
-  delay(700);
-  //clamp(num, CLOSE);    // close
-  delay(400);
+  delay(1000);
+  Serial1.write(CLOSE << (num * 2));
+  delay(2000);
   lift(num, FORWARD);   // move up
-
-  //TODO this can be done later!
-  delay(700);
+  delay(1500);
   lift(num, RELEASE);   // Release
 }
 
 void put(uint8_t num) {
   lift(num, BACKWARD);  // move down
-  delay(800);
-  //clamp(num, OPEN);     // open
-  delay(700);
-  lift(num, FORWARD);   // move up
+  Serial1.write(OPEN << (num * 2));
   delay(400);
-  //clamp(num, CLOSE);    // close
-
-  //TODO this can be done later!
-  delay(300);
+  lift(num, FORWARD);   // move up
+  delay(1200);
+  Serial1.write(STOP << (num * 2));
   lift(num, RELEASE);   // Release
-  //clamp(num, STOP);  // Release
 }
 
 void game() {
   int i = 2;
   while(!digitalRead(BUTTONPIN));
-  Serial.println("FIGHT!");
 
-  //PICKUP RING CODE HERE
+  // Prepare
+  Serial1.write(0b01111111);
+  liftAll(1000);
+  Serial1.write(0b01111111);
 
-  set();
-
+  // Go to center (first action)
   followLines(FORWARD);
-  get(1);
-  
+    // get middle
+    get(1);
+    shiftOver(YDIR, FORWARD, 40);
+    get(2);
+
   turnDrive(FRONTRIGHT);
-  delay(100);
+  liftAll(100);
   followLines(FORWARD, GORIGHT);
+    put(1);
+    shiftOver(YDIR, FORWARD, 10);
+    put(2);
 
-  put(1);
-  delay(1000); // DEPOSIT RING CODE HERE
-
-  while(i--){
+  while(i--) {
     turnDrive(FRONTRIGHT, true);
     followLines(FORWARD, GORIGHT, false);
   
-    delay(100);
+    liftAll(100);
     dirDrive(YDIR, FORWARD, HALF_SPEED);
   
-    delay(150);
+    liftAll(150);
     followLines(FORWARD, GORIGHT, false, true);
-    delay(100);
+    liftAll(100);
     followLines(FORWARD, GOLEFT, false, true);
     followLines(FORWARD);
   
-    delay(1000); // Pickup Ring code here
-  
+      get(1);
+      shiftOver(YDIR, FORWARD, 40);
+      get(2);
+      
     turnDrive(FRONTLEFT);
     followLines(FORWARD, GOLEFT, false, true);
-  
-    //followLines(FORWARD, GORIGHT, false, true);
     followLines(FORWARD);
   
-    delay(1000); // Drop ring code here
+    put(1);
   }
 
   turnDrive(FRONTRIGHT, true);
@@ -412,7 +404,7 @@ void game() {
   followLines(FORWARD, GOLEFT, false, true);
   followLines(FORWARD);
 
-  delay(1000); //pickup rings here
+  get(1);
   
   //try uturn
   turnDrive(FRONTRIGHT);
@@ -423,8 +415,9 @@ void game() {
   followLines(FORWARD, GOLEFT, false);
   followLines(FORWARD, GORIGHT);
 
-  //Drop off ring code here
+  put(1);
 }
+
 #if DEBUG_ENABLED
 
 void serialDo() {
@@ -437,8 +430,7 @@ void serialDo() {
     case '3': get(2); break;  
     case '4': put(0); break;  
     case '5': put(1); break;  
-    case '6': put(2); break;  
-    case '7': set(); break;  
+    case '6': put(2); break;
     
   }
 }
@@ -471,8 +463,12 @@ void followLines(uint8_t dir, byte irSave, bool drive, bool checkBack) {
       speed = (dist << 1) + 60;
       if(speed > FULL_SPEED)
         speed = FULL_SPEED;
-      else if(dist < 50)
+      else if(dist < 50) {
         speed = MEH_SPEED - 20;
+        lift(0, FORWARD);
+        lift(1, FORWARD);
+        lift(2, FORWARD);
+      }
     }
     else
       speed = 0;
@@ -532,8 +528,10 @@ void followLines(uint8_t dir, byte irSave, bool drive, bool checkBack) {
     }
   } while(!drive | ((dist = distance[dir == BACKWARD ? 0 : 2]) > 5));
   // TODO Matt why is this here?
-  if(drive)
-    delay(50);
+  if(drive){
+    dirDrive(XDIR, dir, MEH_SPEED);
+    liftAll(100);
+  }
   dirDrive(); //stop when done
 }
 
