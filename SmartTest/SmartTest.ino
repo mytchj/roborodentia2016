@@ -117,6 +117,19 @@ void spinDrive(int degrees, bool direction) {
   }
 }
 
+int singleEncoderDrive(uint8_t direction, unsigned int long ticks, uint8_t speed) {
+  Location::resetEncoder();
+  int long enC = Location::getEncoder();
+  hm[2]->drive(speed, direction);
+  while(Location::getEncoder() - enC < ticks);
+  hm[2]->drive(0, RELEASE);
+  return Location::getEncoder() - enC - ticks;
+}
+
+int singleEncoderDrive(uint8_t direction, unsigned int long ticks) {
+  return singleEncoderDrive(direction, ticks, FULL_SPEED);
+}
+
 void singleDrive(uint8_t num, uint8_t direction) {
   hm[num]->drive(FULL_SPEED, direction);
 }
@@ -303,8 +316,9 @@ void game() {
     dirDrive(XDIR, BACKWARD, FULL_SPEED);
     delay(200);
     followLines(BACKWARD);
-    singleDrive(2, BACKWARD);
-    delay(700);
+    //singleDrive(2, BACKWARD);
+    //delay(700);
+    singleEncoderDrive(BACKWARD, 2000);
     followLines(FORWARD, GORIGHT, true, false);
     followLines(FORWARD);
     put(1);
