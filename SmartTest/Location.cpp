@@ -5,7 +5,7 @@
 
 // IRsensors
 static const int irRead[IRCOUNT] = {A0, A1, A2, A3, A4, A5};
-volatile long int Location::encoderCount = 0;
+volatile unsigned long int Location::encoderCount = 0;
 int Location::irRaw[IRCOUNT];
 boolean Location::ir[IRCOUNT];
   
@@ -21,8 +21,12 @@ void Location::encoderISR() {
   Location::encoderCount++;
 }
 
-int Location::getEncoder() {  
+unsigned long Location::getEncoder() {  
   return Location::encoderCount;
+}
+
+void Location::resetEncoder() {
+  Location::encoderCount = 0;
 }
 
 int Location::printEncoderCount() {  

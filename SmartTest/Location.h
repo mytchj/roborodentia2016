@@ -10,7 +10,7 @@ class Location {
     static boolean ir[IRCOUNT];
 
   public:
-  volatile static long int encoderCount;
+  volatile static unsigned long int encoderCount;
     static void Init();
 #if DEBUG_ENABLED
     static void printInfrared();
@@ -20,7 +20,8 @@ class Location {
     static bool irMap(int);
     static void encoderISR();
     static int printEncoderCount();
-    static int getEncoder();
+    static unsigned long int getEncoder();
+    static void resetEncoder();
 };
 
 #endif
