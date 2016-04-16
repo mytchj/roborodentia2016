@@ -97,7 +97,11 @@ void endMatch() {
 }
 
 void lift(uint8_t selector, uint8_t pos) {
-  slide[selector]->setSpeed(FULL_SPEED);
+  lift(selector, pos, FULL_SPEED);
+}
+
+void lift(uint8_t selector, uint8_t pos, int speed){
+  slide[selector]->setSpeed(speed);
   slide[selector]->run(pos);
 }
 
@@ -149,7 +153,8 @@ void turnDrive(uint8_t dir, bool ninety){
   turnDrive(dir, ninety, 5000);
 }
 
-void turnDrive(uint8_t dir, bool ninety, int long ticks){
+void turnDrive(uint8_t dir, bool ninety, unsigned int long ticks){
+  Location::resetEncoder();
   int long enC = Location::getEncoder();
   if (dir == FRONTLEFT) {
     hm[0]->drive(200, BACKWARD);
@@ -159,9 +164,9 @@ void turnDrive(uint8_t dir, bool ninety, int long ticks){
     while(Location::getEncoder() - enC < ticks);
   }
   else if (dir == FRONTRIGHT) {
-    hm[0]->drive(HALF_SPEED + 20, FORWARD);
-    hm[1]->drive(HALF_SPEED + 10, BACKWARD);
-    hm[2]->drive(HALF_SPEED + 20, FORWARD);
+    hm[0]->drive(HALF_SPEED + 40, FORWARD);
+    hm[1]->drive(HALF_SPEED + 40, BACKWARD);
+    hm[2]->drive(HALF_SPEED + 40, FORWARD);
     while(Location::getEncoder() - enC < ticks);
   }
   
@@ -228,7 +233,7 @@ void get(uint8_t num) {
   Serial1.write(OPEN << (num * 2));
   delay(1200);
   lift(num, BACKWARD);  // move down
-  delay(800);
+  delay(1200);
   Serial1.write(CLOSE << (num * 2));
   delay(1200);
   lift(num, FORWARD);   // move up
@@ -238,7 +243,7 @@ void get(uint8_t num) {
 
 void put(uint8_t num) {
   lift(num, BACKWARD);  // move down
-  delay(200);
+  delay(300);
   Serial1.write(OPEN << (num * 2));
   delay(250);
   lift(num, FORWARD);   // move up
@@ -249,7 +254,7 @@ void put(uint8_t num) {
 
 void game() {
   startTime = millis();
-  int i = 2;
+  int i = 20;
   while(!digitalRead(BUTTONPIN));
 
   // Prepare
@@ -258,14 +263,28 @@ void game() {
   Serial1.write(0b01111111);
 
   // Go to center (first action)
-  followLines(FORWARD);
+  followLines(FORWARD, 0, true, true, HALF_SPEED);
+  delay(100);
   get(1);
-
-  turnDrive(FRONTRIGHT);
+  //dirDrive(XDIR, BACKWARD);
+  
+  /*liftAll(100);
+  dirDrive();
+  shiftOver(BACKWARD, 4800);
+  Serial1.write(0b01111111);
+  liftAll(100);
+  shiftOver(FORWARD, 1500);
+  dirDrive(XDIR, FORWARD);
+  get(2);
+*/
+  turnDrive(FRONTRIGHT, false, 5000);
   liftAll(100);
   followLines(FORWARD, GORIGHT);
   put(1);
-
+  /*
+  shiftOver(BACKWARD, 1000);
+  put(2);
+*/
   while(i--) {
     turnDrive(FRONTRIGHT, true, 4500);
     followLines(FORWARD, GORIGHT, false);
@@ -277,14 +296,17 @@ void game() {
     followLines(FORWARD, GORIGHT, false, true);
     liftAll(100);
     followLines(FORWARD, GOLEFT, false, true);
-    followLines(FORWARD);
+    followLines(FORWARD, 0, true, true, MEH_SPEED);
   
     get(1);
-      
-    turnDrive(FRONTLEFT);
-    followLines(FORWARD, GOLEFT, false, true);
+
+    dirDrive(XDIR, BACKWARD, FULL_SPEED);
+    delay(200);
+    followLines(BACKWARD);
+    singleDrive(2, BACKWARD);
+    delay(700);
+    followLines(FORWARD, GORIGHT, true, false);
     followLines(FORWARD);
-  
     put(1);
   }
 
@@ -323,10 +345,19 @@ void serialDo() {
     case 'n': game(); break;
     case 'c': Location::printInfrared(); break;
     case 'v': Location::printRawInfrared(); break;
+    case 'b': followLines(BACKWARD); break;
     case '1': followLines(FORWARD, GOLEFT); break;
     case '2': Location::printEncoderCount(); break;
     case '3': dirDrive(YDIR, FORWARD); break;
     case '4': dirDrive(); break;
+
+  
+    
+    case '5': get(1); break;
+    case '6': lift(2, FORWARD); break;
+    case '7': lift(2, BACKWARD); break;
+    case '8': lift(2, RELEASE); break;
+    case '9': get(2); break;
   }
 }
 
@@ -344,18 +375,20 @@ void followLines(uint8_t dir, byte irSave, bool drive){
   followLines(dir, irSave, drive, false);
 }
 
-// Runs the front and back
 void followLines(uint8_t dir, byte irSave, bool drive, bool checkBack) {
-  int speed;
+  followLines(dir, irSave, drive, checkBack, -1);
+}
+// Runs the front and back
+void followLines(uint8_t dir, byte irSave, bool drive, bool checkBack, int spd) {
+  int speed = spd;
   if(drive)
     dirDrive(XDIR, dir, HALF_SPEED);
  
   do{
-
-    Serial.println(
     ir = Location::updateInfrared();
     if(drive){
-      speed = FULL_SPEED;
+      if(speed < 0 || speed > FULL_SPEED)
+        speed = FULL_SPEED;
         lift(0, FORWARD);
         lift(1, FORWARD);
         lift(2, FORWARD);
@@ -420,6 +453,8 @@ void followLines(uint8_t dir, byte irSave, bool drive, bool checkBack) {
       else if(checkBack & ir[4])
         break;
     }
+    if(dir == BACKWARD && ir[3] && ir[5])
+      break;
   } while(!drive | !checkButton());
 
   if(drive){
@@ -428,4 +463,13 @@ void followLines(uint8_t dir, byte irSave, bool drive, bool checkBack) {
   }
 
   dirDrive(); //stop when done
+}
+
+void shiftOver(uint8_t dir, unsigned int long ticks) {
+  Location::resetEncoder();
+  int long enC = Location::getEncoder();
+
+  dirDrive(YDIR, dir, SLOW_SPEED);
+  while(Location::getEncoder() - enC < ticks);
+  dirDrive();
 }
