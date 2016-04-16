@@ -1,5 +1,5 @@
 /* Global */
-#define DEBUG_ENABLED 1
+#define DEBUG_ENABLED 0
 
 /* Main Stuff */
 // Codes for the motor function.

@@ -5,10 +5,7 @@
 #include "config.h"
 
 // Motor & Servo Globals
-AF_DCMotor motor1(2);
-AF_DCMotor motor2(3);
-AF_DCMotor motor3(4);
-AF_DCMotor *slide[SERVOCOUNT] = {&motor1, &motor2, &motor3};
+AF_DCMotor slide(4);
 
 static int startTime;
 static boolean* ir; //[IRCOUNT];
@@ -40,9 +37,7 @@ void setup() {
   // Wait for start
   //while (!digitalRead(BUTTONPIN));
   
-  lift(0, RELEASE);
-  lift(1, RELEASE);
-  lift(2, RELEASE);
+  lift(RELEASE);
 
 #if DEBUG_ENABLED
   Serial.println("Initialized");
@@ -58,16 +53,9 @@ void loop() {
     startTime = millis();
   }
 
-  /*
-  if (millis() - startTime > 179000) // Stop 1 second shy of 3 minutes
-    endMatch();
-  */
-
 #if DEBUG_ENABLED
   if (serialRead())
     serialDo();
-#else
-  game();
 #endif    
 }
 
@@ -80,29 +68,9 @@ int checkButton()  {
   return button; 
 }
 
-void endMatch() {
-  #if DEBUG_ENABLED
-    Serial.println("Alert: Match Over");
-  #endif
-  dirDrive();
-  Serial1.write(0b0011111111);
-  toggleLED();
-  while (!digitalRead(BUTTONPIN)) {
-    #if DEBUG_ENABLED
-      Serial.println("Alert: Restarting");
-    #endif
-    digitalWrite(LEDPIN, LOW);
-    startTime = millis();
-  }
-}
-
-void lift(uint8_t selector, uint8_t pos) {
-  lift(selector, pos, FULL_SPEED);
-}
-
-void lift(uint8_t selector, uint8_t pos, int speed){
-  slide[selector]->setSpeed(speed);
-  slide[selector]->run(pos);
+void lift(uint8_t pos) {
+  slide.setSpeed(FULL_SPEED);
+  slide.run(pos);
 }
 
 void spinDrive(int degrees, bool direction) {
@@ -112,22 +80,8 @@ void spinDrive(int degrees, bool direction) {
   hm[3]->drive(FULL_SPEED, direction ? BACKWARD : FORWARD);
   
   delay(degrees);
-  for (int i = 0; i < MOTORCOUNT; i++) {
+  for (int i = 0; i < MOTORCOUNT; i++)
     hm[i]->drive(0, RELEASE);
-  }
-}
-
-int singleEncoderDrive(uint8_t direction, unsigned int long ticks, uint8_t speed) {
-  Location::resetEncoder();
-  int long enC = Location::getEncoder();
-  hm[2]->drive(speed, direction);
-  while(Location::getEncoder() - enC < ticks);
-  hm[2]->drive(0, RELEASE);
-  return Location::getEncoder() - enC - ticks;
-}
-
-int singleEncoderDrive(uint8_t direction, unsigned int long ticks) {
-  return singleEncoderDrive(direction, ticks, FULL_SPEED);
 }
 
 void singleDrive(uint8_t num, uint8_t direction) {
@@ -177,9 +131,9 @@ void turnDrive(uint8_t dir, bool ninety, unsigned int long ticks){
     while(Location::getEncoder() - enC < ticks);
   }
   else if (dir == FRONTRIGHT) {
-    hm[0]->drive(HALF_SPEED + 40, FORWARD);
-    hm[1]->drive(HALF_SPEED + 40, BACKWARD);
-    hm[2]->drive(HALF_SPEED + 40, FORWARD);
+    hm[0]->drive(FULL_SPEED - 25, FORWARD);
+    hm[1]->drive(FULL_SPEED, BACKWARD);
+    hm[2]->drive(FULL_SPEED - 25, FORWARD);
     while(Location::getEncoder() - enC < ticks);
   }
   
@@ -202,102 +156,52 @@ bool serialRead() {
 }
 #endif
 
-void wheelSpeedTest() {
-  for (int i = 255; i > 0; i--) {
-    dirDrive(YDIR, FORWARD, i);
-    delay(10);
-  }
-  for (int i = 0; i < 255; i++) {
-    dirDrive(YDIR, BACKWARD, i); 
-    delay(10);
-  }
-  dirDrive(YDIR, RELEASE); 
-
-  for (int i = 255; i > 0; i--) {
-    dirDrive(XDIR, FORWARD, i);
-    delay(10);
-  }
-  for (int i = 0; i < 255; i++) {
-    dirDrive(XDIR, BACKWARD, i); 
-    delay(10);
-  }
-  dirDrive(XDIR, RELEASE); 
-
-}
-
-void toggleLED() {
-  static int status = LOW;
-  digitalWrite(LEDPIN, status = !status);
-}
-
 void liftAll(unsigned int time) {
-  lift(0, FORWARD);
-  lift(1, FORWARD);
-  lift(2, FORWARD);
-  
+  lift(FORWARD);
   delay(time);
-  
-  lift(0, RELEASE);
-  lift(1, RELEASE);
-  lift(2, RELEASE);
+  lift(RELEASE);
 }
 
-void get(uint8_t num) {
-  Serial1.write(OPEN << (num * 2));
+void get() {
+  Serial1.write(OPEN << 2);
   delay(1200);
-  lift(num, BACKWARD);  // move down
+  lift(BACKWARD);  // move down
   delay(1200);
-  Serial1.write(CLOSE << (num * 2));
+  Serial1.write(CLOSE << 2);
   delay(1200);
-  lift(num, FORWARD);   // move up
+  lift(FORWARD);   // move up
   delay(1000);
-  lift(num, RELEASE);   // Release
+  lift(RELEASE);   // Release
 }
 
-void put(uint8_t num) {
-  lift(num, BACKWARD);  // move down
-  delay(300);
-  Serial1.write(OPEN << (num * 2));
-  delay(250);
-  lift(num, FORWARD);   // move up
+void put() {
+  lift(BACKWARD);  // move down
+  delay(400);
+  Serial1.write(OPEN << 2);
+  delay(100);
+  lift(FORWARD);   // move up
   delay(1200);
-  Serial1.write(STOP << (num * 2));
-  lift(num, RELEASE);   // Release
+  Serial1.write(STOP << 2);
+  lift(RELEASE);   // Release
 }
 
 void game() {
   startTime = millis();
-  int i = 20;
+  int i = 5;
   while(!digitalRead(BUTTONPIN));
 
   // Prepare
   Serial1.write(0b01111111);
-  liftAll(1000);
-  Serial1.write(0b01111111);
 
   // Go to center (first action)
-  followLines(FORWARD, 0, true, true, HALF_SPEED);
-  delay(100);
-  get(1);
-  //dirDrive(XDIR, BACKWARD);
+  followLines(FORWARD);
+  get();
   
-  /*liftAll(100);
-  dirDrive();
-  shiftOver(BACKWARD, 4800);
-  Serial1.write(0b01111111);
-  liftAll(100);
-  shiftOver(FORWARD, 1500);
-  dirDrive(XDIR, FORWARD);
-  get(2);
-*/
   turnDrive(FRONTRIGHT, false, 5000);
   liftAll(100);
   followLines(FORWARD, GORIGHT);
-  put(1);
-  /*
-  shiftOver(BACKWARD, 1000);
-  put(2);
-*/
+  put();
+  
   while(i--) {
     turnDrive(FRONTRIGHT, true, 4500);
     followLines(FORWARD, GORIGHT, false);
@@ -309,19 +213,15 @@ void game() {
     followLines(FORWARD, GORIGHT, false, true);
     liftAll(100);
     followLines(FORWARD, GOLEFT, false, true);
-    followLines(FORWARD, 0, true, true, MEH_SPEED);
-  
-    get(1);
-
-    dirDrive(XDIR, BACKWARD, FULL_SPEED);
-    delay(200);
-    followLines(BACKWARD);
-    //singleDrive(2, BACKWARD);
-    //delay(700);
-    singleEncoderDrive(BACKWARD, 2000);
-    followLines(FORWARD, GORIGHT, true, false);
     followLines(FORWARD);
-    put(1);
+  
+    get();
+      
+    turnDrive(FRONTLEFT);
+    followLines(FORWARD, GOLEFT, false, true);
+    followLines(FORWARD);
+  
+    put();
   }
 
   turnDrive(FRONTRIGHT, true);
@@ -338,18 +238,17 @@ void game() {
   followLines(FORWARD, GOLEFT, false, true);
   followLines(FORWARD);
 
-  get(1);
+  get();
   
-  //try uturn
+  // try uturn
   turnDrive(FRONTRIGHT);
-  delay(100);
-  turnDrive(FRONTRIGHT);
+  liftAll(300);
+  turnDrive(FRONTRIGHT, true);
   followLines(FORWARD, GORIGHT, false);  
-  
   followLines(FORWARD, GOLEFT, false);
   followLines(FORWARD, GORIGHT);
 
-  put(1);
+  put();
 }
 
 #if DEBUG_ENABLED
@@ -357,21 +256,6 @@ void game() {
 void serialDo() {
   switch (incomingByte) {
     case 'n': game(); break;
-    case 'c': Location::printInfrared(); break;
-    case 'v': Location::printRawInfrared(); break;
-    case 'b': followLines(BACKWARD); break;
-    case '1': followLines(FORWARD, GOLEFT); break;
-    case '2': Location::printEncoderCount(); break;
-    case '3': dirDrive(YDIR, FORWARD); break;
-    case '4': dirDrive(); break;
-
-  
-    
-    case '5': get(1); break;
-    case '6': lift(2, FORWARD); break;
-    case '7': lift(2, BACKWARD); break;
-    case '8': lift(2, RELEASE); break;
-    case '9': get(2); break;
   }
 }
 
@@ -389,23 +273,17 @@ void followLines(uint8_t dir, byte irSave, bool drive){
   followLines(dir, irSave, drive, false);
 }
 
-void followLines(uint8_t dir, byte irSave, bool drive, bool checkBack) {
-  followLines(dir, irSave, drive, checkBack, -1);
-}
 // Runs the front and back
-void followLines(uint8_t dir, byte irSave, bool drive, bool checkBack, int spd) {
-  int speed = spd;
+void followLines(uint8_t dir, byte irSave, bool drive, bool checkBack) {
+  int speed;
   if(drive)
     dirDrive(XDIR, dir, HALF_SPEED);
  
   do{
     ir = Location::updateInfrared();
     if(drive){
-      if(speed < 0 || speed > FULL_SPEED)
-        speed = FULL_SPEED;
-        lift(0, FORWARD);
-        lift(1, FORWARD);
-        lift(2, FORWARD);
+      speed = FULL_SPEED;
+        lift(FORWARD);
     }
     else
       speed = 0;
@@ -423,8 +301,6 @@ void followLines(uint8_t dir, byte irSave, bool drive, bool checkBack, int spd) 
         irSave &= ~FRONTLEFT;
       }
       else{
-        //singleDrive(2, BRAKE);
-        //singleDrive(2, RELEASE);
         dirDrive(XDIR, dir, speed);
       }
     }
@@ -467,8 +343,6 @@ void followLines(uint8_t dir, byte irSave, bool drive, bool checkBack, int spd) 
       else if(checkBack & ir[4])
         break;
     }
-    if(dir == BACKWARD && ir[3] && ir[5])
-      break;
   } while(!drive | !checkButton());
 
   if(drive){
@@ -487,3 +361,4 @@ void shiftOver(uint8_t dir, unsigned int long ticks) {
   while(Location::getEncoder() - enC < ticks);
   dirDrive();
 }
+
