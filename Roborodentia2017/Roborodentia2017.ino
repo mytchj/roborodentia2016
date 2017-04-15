@@ -13,7 +13,7 @@ Adafruit_BNO055 bno = Adafruit_BNO055();
 using namespace imu;
 int mode = 0;
 
-Vector<3> start_pos;
+int start_pos;
 
 void setup() {
 #if DEBUG_ENABLED
@@ -27,31 +27,36 @@ void setup() {
     Serial.print("Ooops, no BNO055 detected ... Check your wiring or I2C ADDR!");
     while(1);
   }
-
-  start_pos = bno.getVector(Adafruit_BNO055::VECTOR_EULER);
+  
+  pinMode(JOYBUTTON, INPUT_PULLUP);
+  Location::Init();
+  start_pos = bno.getVector(Adafruit_BNO055::VECTOR_EULER).x();
 
   #if DEBUG_ENABLED
     Serial.println("Initialized");
   #endif
-
-  pinMode(11, INPUT_PULLUP);
 }
 
 void loop() {
-  if(digitalRead(11) == 0){
+  if(digitalRead(JOYBUTTON) == 0){ // joystick button pressed down
     Serial.print("Changing Mode to: ");
-    mode = (mode + 1) % 3;
+    mode = (mode + 1) % 4;
     switch((mode)){
-      case 0:
+      case START:
         Serial.println("Start State");
       break;
-      case 1:
+      case IR:
         Serial.println("IR Reading");
       break;
-      case 2:
+      case GYRO:
         Serial.println("Gyroscope");
       break;
+      case ENCOD:
+        Serial.println("Encoder");
+        Location::resetEncoder();
+      break;
       default:
+        Serial.println("No State Found");
       break;
     }
     delay(1000);
@@ -83,9 +88,16 @@ void joystickDo() {
   Vector<3> accel = bno.getVector(Adafruit_BNO055::VECTOR_GYROSCOPE);
 
   /*
+   * For simple driving
+   */
+  if(mode == START) {
+      drive(y, x, y, x);
+  }
+  
+  /*
    * For Driving with IR
    */
-  if(mode == IR){
+  else if(mode == IR){
     Location* l = new Location();
   
     // Front IR's with xF
@@ -111,8 +123,8 @@ void joystickDo() {
   /*
    * For Rotation of using the Gyroscope
    */
-  if(mode == GYRO){ 
-    int rotation = abs(start_pos.x() - euler.x());
+  else if(mode == GYRO){ 
+    int rotation = abs(start_pos - euler.x());
   
     if(rotation > 180 && rotation < 355){
       rotation = 360 - rotation;
@@ -125,7 +137,27 @@ void joystickDo() {
     }
     else
       drive(y, x, y, x);
+    Serial.print("ROT = ");
     Serial.println(rotation);
+  }
+
+  /*
+   * For Walking a precise number of steps using motor encoders
+   */
+  else if (mode == ENCOD) {
+    if (x) {
+      Location::resetEncoder();
+      if (x > 0)
+        drive(0, HALF_SPEED, 0, HALF_SPEED);
+      if (x < 0)
+        drive(0, -HALF_SPEED, 0, -HALF_SPEED);
+      while(Location::getEncoder() < 1042)
+        Location::printEncoderCount();
+      drive(0, 0, 0, 0);
+      Serial.print("ENC = ");
+      Location::printEncoderCount();
+      delay(400);
+    }
   }
 }
 
@@ -156,40 +188,4 @@ void spinDrive(int degrees, bool direction) {
   }
 }
 
-void singleDrive(uint8_t num, uint8_t direction) {
-  hm[num]->drive(FULL_SPEED, direction);
-}
-
-void singleDrive(uint8_t num, uint8_t dir, uint8_t speed) {
-  hm[num]->drive(speed, dir);
-}
-
-void dirDrive(bool axis, uint8_t dir, uint8_t speed) {
-  hm[axis ? 0 : 1]->drive(speed, dir);
-  hm[axis ? 2 : 3]->drive(speed, dir);
-}
-
-void dirDrive(bool axis, uint8_t dir) {
-  dirDrive(axis, dir, FULL_SPEED);
-}
-
-void dirDrive(bool axis) {
-  dirDrive(axis, RELEASE);
-}
-
-void dirDrive() {
-  hm[0]->drive(0, RELEASE);
-  hm[1]->drive(0, RELEASE);
-  hm[2]->drive(0, RELEASE);
-  hm[3]->drive(0, RELEASE);
-}
-
-void shiftOver(uint8_t dir, unsigned int long ticks) {
-  Location::resetEncoder();
-  int long enC = Location::getEncoder();
-
-  dirDrive(YDIR, dir, SLOW_SPEED);
-  while(Location::getEncoder() - enC < ticks);
-  dirDrive();
-}
 */

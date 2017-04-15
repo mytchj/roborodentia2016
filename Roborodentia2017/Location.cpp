@@ -29,11 +29,8 @@ void Location::resetEncoder() {
   Location::encoderCount = 0;
 }
 
-int Location::printEncoderCount() {  
-#if DEBUG_ENABLED
+void Location::printEncoderCount() {  
   Serial.println(Location::encoderCount);
-#endif
-  return Location::encoderCount;
 }
 
 boolean* Location::updateInfrared() {
@@ -47,8 +44,6 @@ bool Location::irMap(int luminosity) {
     return true;
   return false;
 }
-
-#if DEBUG_ENABLED
 
 void Location::printInfrared() {
   Location::updateInfrared();
@@ -82,4 +77,3 @@ void Location::printRawInfrared() {
   Serial.println("]");
 }
 
-#endif

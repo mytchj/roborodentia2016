@@ -19,7 +19,7 @@ class Location {
     static boolean* updateInfrared();
     static bool irMap(int);
     static void encoderISR();
-    static int printEncoderCount();
+    static void printEncoderCount();
     static unsigned long int getEncoder();
     static void resetEncoder();
 };

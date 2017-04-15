@@ -14,10 +14,8 @@
 #define MEH_SPEED 120
 #define SLOW_SPEED 80
 
-#define BUTTONPIN 35
-#define LBUTTON 32
-#define RBUTTON 33
-#define ENCODERPIN 20
+#define JOYBUTTON 11
+#define ENCODERPIN 18
 
 #define XDIR 0
 #define YDIR 1
@@ -44,3 +42,4 @@
 #define START 0
 #define IR 1
 #define GYRO 2
+#define ENCOD 3
