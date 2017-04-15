@@ -15,6 +15,7 @@
 #define SLOW_SPEED 80
 
 #define JOYBUTTON 11
+#define LEDPIN 13
 #define ENCODERPIN 18
 
 #define XDIR 0
