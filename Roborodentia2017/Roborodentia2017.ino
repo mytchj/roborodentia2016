@@ -12,7 +12,7 @@ Adafruit_BNO055 bno = Adafruit_BNO055();
 
 using namespace imu;
 int mode = START;
-int start_pos;
+int start_pos = 0;  // start_pos must be positive always, never negative or it will freak out
 
 void setup() {
 #if DEBUG_ENABLED
@@ -39,42 +39,68 @@ void setup() {
 
 void loop() {
   justDoIt();
-  justDoIt2();
 }
+
 
 void justDoIt() {
-    delay(1000);
-    encoderMode(0, 0);
-    for (int i = 0; i < 2500; i++) {
-      gyroMode(0, 250);
+  //6000 is mid to left Y
+  //1000 is start to gap Y
+    Location::resetEncoders();
+
+    while(Location::getEncodery() < 7000) {
+      gyroMode(0, -150);
     }
-    delay(500);
-    encoderMode(0, 0);
-    delay(500);
-    encoderMode(0, 0);
-    
+    brake();
+    delay(1000);
+    encoderModeY(FORWARD, 1000);
+    delay(1000);
+    start_pos += 270;
+    for (int i = 0; i < 1000; i++)
+      gyroMode(0, 0);
+    delay(1000);
+    Location::resetEncoders();
+    while(Location::getEncodery() < 6000) {
+      gyroMode(0, 120);
+    }
+    delay(1000);
+    encoderModeX(FORWARD, 1600);
+    Location::resetEncoders();
+    drive(0, 60, 60, 0);
+    delay(60);
+    while(Location::getEncoderx() != 0) {
+      Location::resetEncoders();
+      irMode(0);
+      delay(60);
+    }
+    digitalWrite(LEDPIN, LOW);
+    delay(10000);
+}
+
+/*
+void justDoIt() {
+  //6000 is mid to left Y
+  //1000 is start to gap Y
+    delay(1000);
+    encoderModeY(FORWARD, 1000);
+    delay(1000);
+    Location::resetEncoders();
+    while(Location::getEncoderx() < 6000) {
+      gyroMode(-120, 0);
+    }
+    delay(1500);
+    encoderModeY(FORWARD, 1600);
+    Location::resetEncoders();
+    drive(60, 0, 60, 0);
+    delay(60);
+    while(Location::getEncoderx() != 0) {
+      Location::resetEncoders();
+      irMode(0);
+      delay(60);
+    }
     digitalWrite(LEDPIN, LOW);
     delay(5000);
 }
-
-void justDoIt2() {
-    delay(1000);
-    encoderMode(-1, -1);
-    delay(1000);
-    encoderMode(-1, -1);
-    delay(1000);
-    for (int i = 0; i < 2500; i++) {
-      gyroMode(0, -250);
-    }
-    encoderMode(0, 0);
-    
-    digitalWrite(LEDPIN, LOW);
-    delay(5000);
-}
-
-void justDoIt3() {
-    mode=4;
-}
+*/
 
 void serialDo() {
   switch (Serial.read()) {
@@ -89,7 +115,7 @@ void joystickDo() {
   int x = analogRead(A0) - 512;
   int y = analogRead(A1) - 512;
 
-    if(digitalRead(JOYBUTTON) == 0){ // joystick button pressed down
+  if(digitalRead(JOYBUTTON) == 0){ // joystick button pressed down
     Serial.print("Changing Mode to: ");
     mode = (mode + 1) % 4;
     switch((mode)){
@@ -108,7 +134,7 @@ void joystickDo() {
       case ENCOD:
         digitalWrite(LEDPIN, LOW);
         Serial.println("Encoder");
-        Location::resetEncoder();
+        Location::resetEncoders();
       break;
       break;
       default:
@@ -116,6 +142,7 @@ void joystickDo() {
         Serial.println("No State Found");
       break;
     }
+  }
 
   //joystick deadzone
   if(abs(x) < 100)
@@ -136,7 +163,7 @@ void joystickDo() {
    * For Driving with IR
    */
   else if(mode == IR){
-    irMode(x, y);
+    irMode(y);
   }
   
   /*
@@ -150,19 +177,35 @@ void joystickDo() {
    * For Walking a precise number of steps using motor encoders
    */
   else if (mode == ENCOD) {
-    encoderMode(x, y);
+   
   }
 }
 
-void encoderMode(int x, int y) {
-    Location::resetEncoder();
-    if (x >= 0)
-      drive(0, HALF_SPEED, 0, HALF_SPEED);
+void encoderModeX(int direction, int distance) {
+    Location::resetEncoders();
+    if (direction)
+      drive(0, ENCODER_SPEED, 0, ENCODER_SPEED);
     else
-      drive(0, -HALF_SPEED, 0, -HALF_SPEED);
-    while(Location::getEncoder() < 1100)
+      drive(0, -ENCODER_SPEED, 0, -ENCODER_SPEED);
+    while(Location::getEncoderx() < distance) {
       Location::printEncoderCount();
-    drive(0, 0, 0, 0);
+    }
+    brake();
+    Serial.print("ENC = ");
+    Location::printEncoderCount();
+    delay(100);
+}
+
+void encoderModeY(int direction, int distance) {
+    Location::resetEncoders();
+    if (direction)
+      drive(ENCODER_SPEED, 0, ENCODER_SPEED, 0);
+    else
+      drive(-ENCODER_SPEED, 0, -ENCODER_SPEED, 0);
+    while(Location::getEncodery() < distance) {
+      Location::printEncoderCount();
+    }
+    brake();
     Serial.print("ENC = ");
     Location::printEncoderCount();
     delay(100);
@@ -170,46 +213,59 @@ void encoderMode(int x, int y) {
 
 void gyroMode(int x, int y) {
   Vector<3> euler = bno.getVector(Adafruit_BNO055::VECTOR_EULER);
-  int rotation = abs(start_pos - euler.x());
+  int rotation = abs(start_pos + euler.x());
+  rotation = rotation % 360;
 
-  if(rotation > 180 && rotation < 355){
-    rotation = 360 - rotation;
-    rotation = map(rotation, -180, 180, 80, 180);
+  Serial.print("eu = ");
+  Serial.print(euler.x());
+  
+  Serial.print("  \tROT = ");
+  Serial.print(rotation);
+  
+  if(rotation > 180 && rotation < 358){
+    rotation = map(rotation, 180, 360, 130, 60);
     drive(y + rotation, x + rotation, y - rotation, x - rotation);
   }
-  else if(rotation > 5 && rotation < 180){
-    rotation = map(rotation, -180, 180, 80, 180);
+  else if(rotation > 2 && rotation < 180){
+    rotation = map(rotation, 0, 180, 60, 130);
     drive(y - rotation, x - rotation, y + rotation, x + rotation);
   }
-  else
+  else {
+    rotation = 0;
     drive(y, x, y, x);
+  }
     
-  Serial.print("ROT = ");
+  Serial.print("  \tCOR = ");
   Serial.println(rotation);
 }
 
-void irMode(int x, int y) {
-    int xF = 0, xB = 0;
-    static Location* l = new Location();
-    l->updateInfrared();
-  
-    // Front IR's with xF
-    if(l->ir[0] == true)
-      xF = -180;
-    else if(l->ir[2] == true)
-      xF = 180;
-    else
-      xF = 0;
-  
-    // Front IR's with xF
-    if(l->ir[3] == true)
-      xB = -180;
-    else if(l->ir[5] == true)
-      xB = 180;
-    else
-      xB = 0;
+void irMode(int y) {
+  int xF = 0, xB = 0;
+  boolean* ir = Location::updateInfrared();
 
-    l->printInfrared();
+  // Front IR's with xF
+  if(ir[0] == ir[1] && ir[1] == ir[2] && ir[1] == true){
+    xF = 0;
+  }
+  else if(ir[0] == true)
+    xF = -IR_SPEED;
+  else if(ir[2] == true)
+    xF = IR_SPEED;
+  else
+    xF = 0;
+
+  // Front IR's with xF
+  if(ir[3] == ir[4] && ir[4] == ir[5] && ir[4] == true){
+    xF = 0;
+  }
+  else if(ir[3] == true)
+    xB = -IR_SPEED;
+  else if(ir[5] == true)
+    xB = IR_SPEED;
+  else
+    xB = 0;
+
+  if (xF & xB)
     drive(y, xF, y, xB);
 }
 

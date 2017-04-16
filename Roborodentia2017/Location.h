@@ -5,12 +5,13 @@
 #include "config.h"
 
 class Location {
-  public:
+  private:
     static int irRaw[IRCOUNT];
     static boolean ir[IRCOUNT];
 
   public:
-  volatile static unsigned long int encoderCount;
+  volatile static unsigned long int encoderCountx;
+  volatile static unsigned long int encoderCounty;
     static void Init();
 #if DEBUG_ENABLED
     static void printInfrared();
@@ -18,10 +19,12 @@ class Location {
 #endif
     static boolean* updateInfrared();
     static bool irMap(int);
-    static void encoderISR();
+    static void encoderISRx();
+    static void encoderISRy();
     static void printEncoderCount();
-    static unsigned long int getEncoder();
-    static void resetEncoder();
+    static unsigned long int getEncoderx();
+    static unsigned long int getEncodery();
+    static void resetEncoders();
 };
 
 #endif

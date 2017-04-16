@@ -5,32 +5,45 @@
 
 // IRsensors
 static const int irRead[IRCOUNT] = {A2, A3, A4, A5, A6, A7};
-volatile unsigned long int Location::encoderCount = 0;
+volatile unsigned long int Location::encoderCountx = 0;
+volatile unsigned long int Location::encoderCounty = 0;
 int Location::irRaw[IRCOUNT];
 boolean Location::ir[IRCOUNT];
   
 void Location::Init(void) {
-  pinMode(ENCODERPIN, INPUT_PULLUP);
-  attachInterrupt(digitalPinToInterrupt(ENCODERPIN), encoderISR, CHANGE);
+  pinMode(ENCODERPINX, INPUT_PULLUP);
+  pinMode(ENCODERPINY, INPUT_PULLUP);
+  attachInterrupt(digitalPinToInterrupt(ENCODERPINX), encoderISRx, CHANGE);
+  attachInterrupt(digitalPinToInterrupt(ENCODERPINY), encoderISRy, CHANGE);
   // IR Sensors
   for (int i = 0; i < IRCOUNT; i++)
     pinMode(irRead[i], INPUT);
 }
 
-void Location::encoderISR() {
-  Location::encoderCount++;
+void Location::encoderISRx() {
+  Location::encoderCountx++;
+}
+void Location::encoderISRy() {
+  Location::encoderCounty++;
 }
 
-unsigned long Location::getEncoder() {  
-  return Location::encoderCount;
+unsigned long Location::getEncoderx() {  
+  return Location::encoderCountx;
 }
 
-void Location::resetEncoder() {
-  Location::encoderCount = 0;
+unsigned long Location::getEncodery() {  
+  return Location::encoderCounty;
+}
+
+void Location::resetEncoders() {
+  Location::encoderCountx = 0;
+  Location::encoderCounty = 0;
 }
 
 void Location::printEncoderCount() {  
-  Serial.println(Location::encoderCount);
+  Serial.print(Location::encoderCountx);
+  Serial.print("  \t  ");
+  Serial.println(Location::encoderCounty);
 }
 
 boolean* Location::updateInfrared() {
@@ -47,7 +60,7 @@ bool Location::irMap(int luminosity) {
 
 void Location::printInfrared() {
   Location::updateInfrared();
-  Serial.println("INFRARED: ");
+  //Serial.println("INFRARED: ");
   Serial.print("[");
   Serial.print((ir[0]) ? "#" : "_");
   Serial.print((ir[1]) ? "#" : "_");
@@ -63,7 +76,7 @@ void Location::printInfrared() {
 
 void Location::printRawInfrared() {
   Location::updateInfrared();
-  Serial.println("Raw INFRARED: ");
+  //Serial.println("Raw INFRARED: ");
   Serial.print("[");
   Serial.print(irRaw[0]);  Serial.print("\t");
   Serial.print(irRaw[1]);  Serial.print("\t");

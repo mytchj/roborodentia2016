@@ -9,14 +9,13 @@
 #define IRCOUNT 6
 
 /* Location.cpp stuff */
-#define FULL_SPEED 255
-#define HALF_SPEED 160
-#define MEH_SPEED 120
-#define SLOW_SPEED 80
+#define ENCODER_SPEED 90
+#define IR_SPEED 90
 
 #define JOYBUTTON 11
 #define LEDPIN 13
-#define ENCODERPIN 18
+#define ENCODERPINX 18
+#define ENCODERPINY 19
 
 #define XDIR 0
 #define YDIR 1

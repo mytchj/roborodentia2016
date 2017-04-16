@@ -29,7 +29,7 @@
       digitalWrite(a, LOW);
       digitalWrite(b, LOW);
     }
-    speed = abs(map(speed, -512, 512, -255, 255));
+    speed = abs(constrain(speed, -255, 255));
     if(speed < 50)
       speed = 0;
     analogWrite(s, speed);
