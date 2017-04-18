@@ -60,7 +60,7 @@ bool Location::irMap(int luminosity) {
 
 void Location::printInfrared() {
   Location::updateInfrared();
-  //Serial.println("INFRARED: ");
+  Serial.println("INFRARED: ");
   Serial.print("[");
   Serial.print((ir[0]) ? "#" : "_");
   Serial.print((ir[1]) ? "#" : "_");

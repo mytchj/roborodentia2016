@@ -3,10 +3,10 @@
 #include "config.h"
 #include "Adafruit_BNO055.h"
 
-HMotor hmotor1(22, 23, 4);
-HMotor hmotor2(52, 53, 3);
-HMotor hmotor3(50, 51, 2);
-HMotor hmotor4(25, 24, 5);
+HMotor hmotor1(22, 23, 2);
+HMotor hmotor2(50, 51, 4);
+HMotor hmotor3(52, 53, 5);
+HMotor hmotor4(24, 25, 3);
 HMotor *hm[MOTORCOUNT] = {&hmotor1, &hmotor2, &hmotor3, &hmotor4};
 Adafruit_BNO055 bno = Adafruit_BNO055();
 
@@ -37,8 +37,23 @@ void setup() {
   #endif
 }
 
+void test() {
+  drive(100, 0, 0, 0);
+  delay(3000);
+  drive(0, 100, 0, 0);
+  delay(3000);
+  drive(0, 0, 100, 0);
+  delay(3000);
+  drive(0, 0, 0, 100);
+  delay(3000);  
+}
+
 void loop() {
+  //Location::printInfrared();
+  //irMode(120);
   justDoIt();
+  //test();
+  //delay(500);
 }
 
 
@@ -47,60 +62,69 @@ void justDoIt() {
   //1000 is start to gap Y
     Location::resetEncoders();
 
-    while(Location::getEncodery() < 7000) {
-      gyroMode(0, -150);
+    // move to mid wall
+    while(Location::getEncodery() < 6500) {
+      irMode(-250);
     }
+    // stop when at wall
     brake();
-    delay(1000);
-    encoderModeY(FORWARD, 1000);
-    delay(1000);
+
+    // DO STUFF
+    delay(1500);
+
+    // move away from wall and line up with gap
+    encoderModeY(FORWARD, 742);
+
+    // change rotation by 90 degrees to face scoring pegs
     start_pos += 270;
-    for (int i = 0; i < 1000; i++)
+    for (int i = 0; i < 1200; i++)
       gyroMode(0, 0);
-    delay(1000);
+
+    // move from mid to wall (through gap)
     Location::resetEncoders();
-    while(Location::getEncodery() < 6000) {
+    while(Location::getEncodery() < 9100) {
       gyroMode(0, 120);
     }
-    delay(1000);
-    encoderModeX(FORWARD, 1600);
-    Location::resetEncoders();
-    drive(0, 60, 60, 0);
-    delay(60);
-    while(Location::getEncoderx() != 0) {
-      Location::resetEncoders();
-      irMode(0);
-      delay(60);
-    }
-    digitalWrite(LEDPIN, LOW);
-    delay(10000);
-}
+    brake();
 
-/*
-void justDoIt() {
-  //6000 is mid to left Y
-  //1000 is start to gap Y
-    delay(1000);
+    // move closer to middle
+    encoderModeX(BACKWARD, 2300);
+    brake();
+    for (int i = 0; i < 3200; i++) {
+      irMode(0, BACKWARD, BACKWARD);
+    }
+    brake();
+
+    // thats all folks.
+    digitalWrite(LEDPIN, HIGH);
+    delay(3000);
+
+    // move closer to middle
+    encoderModeX(BACKWARD, 2300);
+    
+    // move from mid to wall (through gap)
+    Location::resetEncoders();
+    while(Location::getEncodery() < 8400) {
+      gyroMode(0, -120);
+    }
+    brake();
+    
+    // change rotation by 90 degrees to face scoring pegs
+    start_pos += 90;
+    for (int i = 0; i < 1000; i++)
+      gyroMode(0, 0);
+
+    for (int i = 0; i < 2000; i++) {
+      irMode(0, BACKWARD, BACKWARD);
+    }
+    brake();
+
     encoderModeY(FORWARD, 1000);
-    delay(1000);
-    Location::resetEncoders();
-    while(Location::getEncoderx() < 6000) {
-      gyroMode(-120, 0);
-    }
-    delay(1500);
-    encoderModeY(FORWARD, 1600);
-    Location::resetEncoders();
-    drive(60, 0, 60, 0);
-    delay(60);
-    while(Location::getEncoderx() != 0) {
-      Location::resetEncoders();
-      irMode(0);
-      delay(60);
-    }
+    
+    // thats all folks.
     digitalWrite(LEDPIN, LOW);
-    delay(5000);
+    delay(3000);
 }
-*/
 
 void serialDo() {
   switch (Serial.read()) {
@@ -183,7 +207,7 @@ void joystickDo() {
 
 void encoderModeX(int direction, int distance) {
     Location::resetEncoders();
-    if (direction)
+    if (direction == FORWARD)
       drive(0, ENCODER_SPEED, 0, ENCODER_SPEED);
     else
       drive(0, -ENCODER_SPEED, 0, -ENCODER_SPEED);
@@ -198,7 +222,7 @@ void encoderModeX(int direction, int distance) {
 
 void encoderModeY(int direction, int distance) {
     Location::resetEncoders();
-    if (direction)
+    if (direction == FORWARD)
       drive(ENCODER_SPEED, 0, ENCODER_SPEED, 0);
     else
       drive(-ENCODER_SPEED, 0, -ENCODER_SPEED, 0);
@@ -240,6 +264,11 @@ void gyroMode(int x, int y) {
 }
 
 void irMode(int y) {
+  irMode(y, 0, 0);
+}
+
+
+void irMode(int y, int seekF, int seekB) {
   int xF = 0, xB = 0;
   boolean* ir = Location::updateInfrared();
 
@@ -251,8 +280,15 @@ void irMode(int y) {
     xF = -IR_SPEED;
   else if(ir[2] == true)
     xF = IR_SPEED;
-  else
-    xF = 0;
+  else{
+    if(seekF == FORWARD)
+      xF = IR_SPEED;
+    else if(seekF == BACKWARD)
+      xF = -IR_SPEED;
+    else
+      xF = 0;
+
+  }
 
   // Front IR's with xF
   if(ir[3] == ir[4] && ir[4] == ir[5] && ir[4] == true){
@@ -263,9 +299,16 @@ void irMode(int y) {
   else if(ir[5] == true)
     xB = IR_SPEED;
   else
-    xB = 0;
+    if(seekB == FORWARD)
+      xB = IR_SPEED;
+    else if(seekB == BACKWARD)
+      xB = -IR_SPEED;
+    else
+      xB = 0;
 
-  if (xF & xB)
+  if (y == 0 && (xF == 0 ^ xB == 0)) // stationary needs more power to make it move if only one is off
+    drive(0, xF * 2, 0, xB * 2);
+  else // moving 
     drive(y, xF, y, xB);
 }
 
@@ -283,17 +326,3 @@ void brake(){
   hm[2]->drive(0, BRAKE);
   hm[3]->drive(0, BRAKE);
 }
-/*
-void spinDrive(int degrees, bool direction) {
-  hm[0]->drive(FULL_SPEED, direction ? FORWARD : BACKWARD);                    
-  hm[1]->drive(FULL_SPEED, direction ? FORWARD : BACKWARD);
-  hm[2]->drive(FULL_SPEED, direction ? BACKWARD : FORWARD);
-  hm[3]->drive(FULL_SPEED, direction ? BACKWARD : FORWARD);
-  
-  delay(degrees);
-  for (int i = 0; i < MOTORCOUNT; i++) {
-    hm[i]->drive(0, RELEASE);
-  }
-}
-
-*/
