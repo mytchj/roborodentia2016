@@ -9,8 +9,8 @@
 #define IRCOUNT 6
 
 /* Location.cpp stuff */
-#define ENCODER_SPEED 90
-#define IR_SPEED 90
+#define ENCODER_SPEED 175
+#define IR_SPEED 100
 
 #define JOYBUTTON 11
 #define LEDPIN 13
