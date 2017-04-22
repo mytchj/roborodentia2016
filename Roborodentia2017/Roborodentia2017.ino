@@ -14,6 +14,7 @@ HMotor *hm[MOTORCOUNT] = {&hmotor1, &hmotor2, &hmotor3, &hmotor4};
 Adafruit_BNO055 bno = Adafruit_BNO055();
 Servo grabber[3];
 Servo dumper[2];
+Servo flapper;
 using namespace imu;
 int start_pos = 0;  // start_pos must be positive always, never negative or it will freak out
 double tilt = 0;
@@ -36,6 +37,7 @@ void setup() {
   grabber[RIGHT].writeMicroseconds(3000);
   dumper[LEFT].writeMicroseconds(3000);
   dumper[RIGHT].writeMicroseconds(3000);
+  flapper.writeMicroseconds(3000);
   
   if(!bno.begin())
   {
@@ -58,8 +60,6 @@ void test(){
 }
 
 void loop() {  
- // test();
-  
   getRings();
   startToMid();
   midToGap1();
@@ -247,14 +247,17 @@ void gap2ToPickup() {
   for (int i = 0; i < 1200; i++)
     gyroMode(0, 0);
 
+  for (int i = 0; i < 400; i++) {
+    irMode(-100, BACKWARD, BACKWARD);
+  }
   for (int i = 0; i < 3000; i++) {
     irMode(0, BACKWARD, BACKWARD);
   }
   for (int i = 0; i < 600; i++)
     gyroMode(0, 0);
   
-  for (int i = 0; i < 1500; i++) {
-    irMode(0);
+  for (int i = 0; i < 2000; i++) {
+    irMode(50);
   }
   brake();
 }
@@ -331,7 +334,6 @@ void irMode(int y, int seekF, int seekB) {
   boolean* ir = Location::updateInfrared();
 
   // Front IR's with xF
-
   if(ir[0] == true)
     xF = -IR_SPEED;
   else if(ir[2] == true)
@@ -341,8 +343,6 @@ void irMode(int y, int seekF, int seekB) {
       xF = IR_SPEED;
     else if(seekF == BACKWARD)
       xF = -IR_SPEED;
-    else
-      xF = 0;
   }
 
   // Back IR's wth xB
@@ -355,8 +355,6 @@ void irMode(int y, int seekF, int seekB) {
       xB = IR_SPEED;
     else if(seekB == BACKWARD)
       xB = -IR_SPEED;
-    else
-      xB = 0;
   }
 
   //If a double black is read then ignore it and make the motors move the same
