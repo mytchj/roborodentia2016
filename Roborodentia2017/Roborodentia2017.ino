@@ -52,8 +52,14 @@ void setup() {
   Serial.println("Initialized");
   #endif
 }
+void test(){
+  midToGap1();
+  delay(3000);
+}
 
 void loop() {  
+ // test();
+  
   getRings();
   startToMid();
   midToGap1();
@@ -66,8 +72,8 @@ void loop() {
 
 void getRings() {
   encoderModeY(BACKWARD, 300);
-  dumper[LEFT].writeMicroseconds(850);
-  dumper[RIGHT].writeMicroseconds(850);
+  dumper[LEFT].writeMicroseconds(900);
+  dumper[RIGHT].writeMicroseconds(900);
   waitForPickup();
   waitForPickup();
  /*
@@ -107,30 +113,29 @@ void startToMid() {
 
 void midToGap1() {
   int isLift;
-  Vector<3> euler = bno.getVector(Adafruit_BNO055::VECTOR_EULER);
   // move away from wall and line up with gap1
-  encoderModeY(FORWARD, 150);
+  encoderModeY(FORWARD, 175);
 
   // change rotation by 90 degrees to face scoring pegs
   start_pos += 270;
   for (int i = 0; i < 1250; i++)
     gyroMode(0, 0);  
 
-  encoderModeX(BACKWARD, 300);
-  
-  tilt = euler.y();
+  encoderModeX(BACKWARD, 175);
+
+  tilt = bno.getVector(Adafruit_BNO055::VECTOR_EULER).y();
   Serial.print("Permatilt = ");
   Serial.println(tilt);
   
   // move from mid to wall (through gap)
   Location::resetEncoders();
   while(Location::getEncodery() < 9000) {
-   /* isLift = isLifted();
+    isLift = isLifted();
     if(abs(isLift) > 0) {
       gyroMode(isLift, isLift);
       umph = true;
     }
-    else*/
+    else
       gyroMode(0, 150); 
     
     Vector<3> acceleration = bno.getVector(Adafruit_BNO055::VECTOR_LINEARACCEL); 
@@ -162,7 +167,7 @@ void gap1ToScore() {
  /*
   * Drive to the scoring pegs
   */
-  encoderModeX(BACKWARD, 1000);
+  encoderModeX(BACKWARD, 800);
   for (int i = 0; i < 2500; i++) {
     irMode(0, BACKWARD, BACKWARD);
   }
@@ -180,15 +185,17 @@ void deposit() {
   encoderModeY(FORWARD, 10);
   encoderModeY(BACKWARD, 10);
 
-  
+  for(int i = 0; i < 300; i++)
+    gyroMode(0, 0);
   encoderModeY(BACKWARD, 420);
+
 }
 
 void scoreToGap2() {
  /*
   * Move Left to the gap
   */
-  encoderModeX(BACKWARD, 2200);               //G2
+  encoderModeX(BACKWARD, 2000);               //G2
   grabber[LEFT].writeMicroseconds(3000);
   grabber[MIDDLE].writeMicroseconds(3000);
   grabber[RIGHT].writeMicroseconds(3000);
@@ -207,8 +214,8 @@ void gap2ToPickup() {
 */
   // move from wall to mid (through gap)
   Location::resetEncoders();
-  while(Location::getEncodery() < 7000) {
-    /*isLift = isLifted();
+  while(Location::getEncodery() < 6000) {
+    isLift = isLifted();
     Vector<3> acceleration = bno.getVector(Adafruit_BNO055::VECTOR_LINEARACCEL); 
     int accelY = abs(acceleration.y());
     if(abs(isLift) > 0){
@@ -220,9 +227,9 @@ void gap2ToPickup() {
         for(int i = 0; i < 300; i++)
           gyroMode(-120, -120);
     }
-    else{*/
+    else{
       gyroMode(0, -120);
-    //}
+    }
   }
   brake();    
   
@@ -234,19 +241,22 @@ void gap2ToPickup() {
   }  
 
  /* 
-  * change rotation by 90 degrees to face scoring pegs
+  * change rotation by 90 degrees to face supply pegs
   */
   start_pos += 90;
   for (int i = 0; i < 1200; i++)
     gyroMode(0, 0);
 
-  for (int i = 0; i < 2500; i++) {
+  for (int i = 0; i < 3000; i++) {
     irMode(0, BACKWARD, BACKWARD);
   }
-  brake();
-  
-  for (int i = 0; i < 500; i++)
+  for (int i = 0; i < 600; i++)
     gyroMode(0, 0);
+  
+  for (int i = 0; i < 1500; i++) {
+    irMode(0);
+  }
+  brake();
 }
 
 void waitForPickup() {
@@ -326,14 +336,13 @@ void irMode(int y, int seekF, int seekB) {
     xF = -IR_SPEED;
   else if(ir[2] == true)
     xF = IR_SPEED;
-  else{
+  else if(ir[1] == false) {
     if(seekF == FORWARD)
       xF = IR_SPEED;
     else if(seekF == BACKWARD)
       xF = -IR_SPEED;
     else
       xF = 0;
-
   }
 
   // Back IR's wth xB
@@ -341,13 +350,14 @@ void irMode(int y, int seekF, int seekB) {
     xB = -IR_SPEED;
   else if(ir[5] == true)
     xB = IR_SPEED;
-  else
+  else if(ir[4] == false) {
     if(seekB == FORWARD)
       xB = IR_SPEED;
     else if(seekB == BACKWARD)
       xB = -IR_SPEED;
     else
       xB = 0;
+  }
 
   //If a double black is read then ignore it and make the motors move the same
   if(ir[3] == ir[4] && ir[4] == ir[5] && ir[4] == true){
@@ -401,4 +411,3 @@ void pickup(Servo* servo) {
   servo->writeMicroseconds(900);  // 0 is up
   // Takes 500 ms to react
 }
-
