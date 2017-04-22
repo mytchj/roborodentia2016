@@ -12,9 +12,9 @@ HMotor hmotor3(52, 53, 5);
 HMotor hmotor4(24, 25, 3);
 HMotor *hm[MOTORCOUNT] = {&hmotor1, &hmotor2, &hmotor3, &hmotor4};
 Adafruit_BNO055 bno = Adafruit_BNO055();
-Servo grabber[3];
-Servo dumper[2];
-Servo flapper;
+//Servo grabber[3];
+//Servo dumper[2];
+//Servo flapper;
 using namespace imu;
 int start_pos = 0;  // start_pos must be positive always, never negative or it will freak out
 double tilt = 0;
@@ -26,18 +26,19 @@ void setup() {
   Serial.println("Initializing");
   #endif
 
-  grabber[LEFT].attach(9);
-  grabber[MIDDLE].attach(10);
-  grabber[RIGHT].attach(8);
-  dumper[LEFT].attach(11);
-  dumper[RIGHT].attach(12);
+  //grabber[LEFT].attach(9);
+  //grabber[MIDDLE].attach(10);
+  //grabber[RIGHT].attach(8);
+  //dumper[LEFT].attach(11);
+  //dumper[RIGHT].attach(12);
+  //flapper.attach(13);
   // 3000 is down, 0 is up
-  grabber[LEFT].writeMicroseconds(3000);
-  grabber[MIDDLE].writeMicroseconds(3000);
-  grabber[RIGHT].writeMicroseconds(3000);
-  dumper[LEFT].writeMicroseconds(3000);
-  dumper[RIGHT].writeMicroseconds(3000);
-  flapper.writeMicroseconds(3000);
+  //grabber[LEFT].writeMicroseconds(3000);
+  //grabber[MIDDLE].writeMicroseconds(3000);
+  //grabber[RIGHT].writeMicroseconds(3000);
+  //dumper[LEFT].writeMicroseconds(3000);
+  //dumper[RIGHT].writeMicroseconds(3000);
+  //flapper.writeMicroseconds(3000);
   
   if(!bno.begin())
   {
@@ -46,7 +47,6 @@ void setup() {
     while(1);
   }
   
-  pinMode(LEDPIN, OUTPUT);
   Location::Init();
   start_pos = bno.getVector(Adafruit_BNO055::VECTOR_EULER).x();
 
@@ -59,7 +59,7 @@ void test(){
   delay(3000);
 }
 
-void loop() {  
+void loop() {
   getRings();
   startToMid();
   midToGap1();
@@ -67,31 +67,30 @@ void loop() {
   deposit();
   scoreToGap2();
   gap2ToPickup();
-
 }
 
 void getRings() {
   encoderModeY(BACKWARD, 300);
-  dumper[LEFT].writeMicroseconds(900);
-  dumper[RIGHT].writeMicroseconds(900);
+  //dumper[LEFT].writeMicroseconds(880);
+  //dumper[RIGHT].writeMicroseconds(880);
   waitForPickup();
   waitForPickup();
  /*
   * Pickup Rings
   */
   encoderModeY(FORWARD, 500);
-  pickup(&grabber[MIDDLE]);
+  //pickup(&grabber[MIDDLE]);
   waitForPickup();
   encoderModeY(BACKWARD, 400);
 
 
 
 
-  pickup(&grabber[LEFT]);
-  pickup(&grabber[RIGHT]);
+  //pickup(&grabber[LEFT]);
+  //pickup(&grabber[RIGHT]);
 
-  dumper[LEFT].writeMicroseconds(0);  // 0 is up
-  dumper[RIGHT].writeMicroseconds(0);  // 0 is up
+  //dumper[LEFT].writeMicroseconds(0);  // 0 is up
+  //dumper[RIGHT].writeMicroseconds(0);  // 0 is up
  
   for (int i = 0; i < 1500; i++) {
     irMode(0, FORWARD, FORWARD);
@@ -106,7 +105,7 @@ void startToMid() {
   while(Location::getEncodery() < 500)  irMode(-70);
   while(Location::getEncodery() < 1500) irMode(-150);
   while(Location::getEncodery() < 3200) irMode(-250);
-  while(Location::getEncodery() < 6000)  irMode(-80);
+  while(Location::getEncodery() < 6000) irMode(-80);
   // stop when at wall
   brake();
 }
@@ -118,14 +117,13 @@ void midToGap1() {
 
   // change rotation by 90 degrees to face scoring pegs
   start_pos += 270;
-  for (int i = 0; i < 1250; i++)
+  for (int i = 0; i < 1350; i++)
     gyroMode(0, 0);  
 
+  //flapper.writeMicroseconds(3000);
   encoderModeX(BACKWARD, 175);
 
   tilt = bno.getVector(Adafruit_BNO055::VECTOR_EULER).y();
-  Serial.print("Permatilt = ");
-  Serial.println(tilt);
   
   // move from mid to wall (through gap)
   Location::resetEncoders();
@@ -168,9 +166,8 @@ void gap1ToScore() {
   * Drive to the scoring pegs
   */
   encoderModeX(BACKWARD, 800);
-  for (int i = 0; i < 2500; i++) {
-    irMode(0, BACKWARD, BACKWARD);
-  }
+  for (int i = 0; i < 2500 && !irMode(0, BACKWARD, BACKWARD); i++);
+  encoderModeX(FORWARD, 50);
   brake();  
 }
 
@@ -178,16 +175,16 @@ void deposit() {
   encoderModeY(BACKWARD, 220);
   brake();
   waitForPickup();
-  dumper[LEFT].writeMicroseconds(1130);  // 0 is up
-  dumper[RIGHT].writeMicroseconds(1130);  // 0 is up
+  //dumper[LEFT].writeMicroseconds(1130);  // 0 is up
+  //dumper[RIGHT].writeMicroseconds(1130);  // 0 is up
   waitForPickup();
   
   encoderModeY(FORWARD, 10);
   encoderModeY(BACKWARD, 10);
 
-  for(int i = 0; i < 300; i++)
+  for(int i = 0; i < 400; i++)
     gyroMode(0, 0);
-  encoderModeY(BACKWARD, 420);
+  encoderModeY(BACKWARD, 300);
 
 }
 
@@ -195,13 +192,12 @@ void scoreToGap2() {
  /*
   * Move Left to the gap
   */
-  encoderModeX(BACKWARD, 2000);               //G2
-  grabber[LEFT].writeMicroseconds(3000);
-  grabber[MIDDLE].writeMicroseconds(3000);
-  grabber[RIGHT].writeMicroseconds(3000);
-  dumper[LEFT].writeMicroseconds(3000);  // 0 is up
-  dumper[RIGHT].writeMicroseconds(3000);  // 0 is up
-
+  encoderModeX(BACKWARD, 1900);               //G2
+  //grabber[LEFT].writeMicroseconds(3000);
+  //grabber[MIDDLE].writeMicroseconds(3000);
+  //grabber[RIGHT].writeMicroseconds(3000);
+  //dumper[LEFT].writeMicroseconds(3000);  // 0 is up
+  //dumper[RIGHT].writeMicroseconds(3000);  // 0 is up
 }
 
 void gap2ToPickup() {
@@ -247,33 +243,20 @@ void gap2ToPickup() {
   for (int i = 0; i < 1200; i++)
     gyroMode(0, 0);
 
-  for (int i = 0; i < 400; i++) {
-    irMode(-100, BACKWARD, BACKWARD);
-  }
-  for (int i = 0; i < 3000; i++) {
-    irMode(0, BACKWARD, BACKWARD);
-  }
-  for (int i = 0; i < 600; i++)
+  for (int i = 0; i < 400 && !irMode(-100, BACKWARD, BACKWARD); i++);
+  for (int i = 0; i < 3000 && !irMode(0, BACKWARD, BACKWARD); i++);
+  encoderModeX(FORWARD, 50);
+  for (int i = 0; i < 3600; i++)
     gyroMode(0, 0);
-  
-  for (int i = 0; i < 2000; i++) {
-    irMode(50);
-  }
+  for (int i = 0; i < 2000 && !irMode(50); i++);
   brake();
+  
 }
 
 void waitForPickup() {
   delay(1000);
 }
 
-void serialDo() {
-  switch (Serial.read()) {
-    case 'c': Location::printInfrared(); break;
-    case 'v': Location::printRawInfrared(); break;
-    
-   // case '9': dirDrive(); break;
-  }
-}
 
 void encoderModeX(int direction, int distance) {
     Location::resetEncoders();
@@ -282,12 +265,9 @@ void encoderModeX(int direction, int distance) {
     else
       drive(0, -ENCODER_SPEED, 0, -ENCODER_SPEED);
     while(Location::getEncoderx() < distance) {
-      Location::printEncoderCount();
+      //Location::printEncoderCount();
     }
     brake();
-    Serial.print("ENC = ");
-    Location::printEncoderCount();
-    delay(100);
 }
 
 void encoderModeY(int direction, int distance) {
@@ -297,12 +277,9 @@ void encoderModeY(int direction, int distance) {
     else
       drive(-ENCODER_SPEED, 0, -ENCODER_SPEED, 0);
     while(Location::getEncodery() < distance) {
-      Location::printEncoderCount();
+      //Location::printEncoderCount();
     }
     brake();
-    Serial.print("ENC = ");
-    Location::printEncoderCount();
-    delay(100);
 }
 
 void gyroMode(int x, int y) {
@@ -324,12 +301,12 @@ void gyroMode(int x, int y) {
   }
 }
 
-void irMode(int y) {
-  irMode(y, 0, 0);
+int irMode(int y) {
+  return irMode(y, 0, 0);
 }
 
 
-void irMode(int y, int seekF, int seekB) {
+int irMode(int y, int seekF, int seekB) {
   int xF = 0, xB = 0;
   boolean* ir = Location::updateInfrared();
 
@@ -369,6 +346,8 @@ void irMode(int y, int seekF, int seekB) {
     drive(0, xF * 2, 0, xB * 2);
   else // moving 
     drive(y, xF, y, xB);
+
+  return (ir[0] | ir[1] | ir[2]) & (ir[3] | ir[4] | ir[5]);
 }
 
 void drive(int m1, int m2, int m3, int m4){
@@ -380,10 +359,6 @@ void drive(int m1, int m2, int m3, int m4){
 
 int isLifted(){
   Vector<3> euler = bno.getVector(Adafruit_BNO055::VECTOR_EULER);
-  Serial.print("euY = ");
-  Serial.print(euler.y());
-  Serial.print("tilt = ");
-  Serial.println(tilt);
   
   if(euler.y() - tilt < -2)
     return -130;
