@@ -1,3 +1,4 @@
+#include <Servo.h> 
 #include "HMotor.h"
 #include "Location.h"
 #include "config.h"
@@ -11,19 +12,31 @@ HMotor hmotor3(52, 53, 5);
 HMotor hmotor4(24, 25, 3);
 HMotor *hm[MOTORCOUNT] = {&hmotor1, &hmotor2, &hmotor3, &hmotor4};
 Adafruit_BNO055 bno = Adafruit_BNO055();
-
+Servo grabber[3];
+Servo dumper[2];
 using namespace imu;
-int mode = START;
 int start_pos = 0;  // start_pos must be positive always, never negative or it will freak out
-int tilt = 0;
+double tilt = 0;
 boolean umph = false;
 
 void setup() {
-#if DEBUG_ENABLED
+  #if DEBUG_ENABLED
   Serial.begin(115200);
   Serial.println("Initializing");
-#endif
+  #endif
 
+  grabber[LEFT].attach(9);
+  grabber[MIDDLE].attach(10);
+  grabber[RIGHT].attach(8);
+  dumper[LEFT].attach(11);
+  dumper[RIGHT].attach(12);
+  // 3000 is down, 0 is up
+  grabber[LEFT].writeMicroseconds(3000);
+  grabber[MIDDLE].writeMicroseconds(3000);
+  grabber[RIGHT].writeMicroseconds(3000);
+  dumper[LEFT].writeMicroseconds(3000);
+  dumper[RIGHT].writeMicroseconds(3000);
+  
   if(!bno.begin())
   {
     /* There was a problem detecting the BNO055 ... check your connections */
@@ -31,87 +44,93 @@ void setup() {
     while(1);
   }
   
-  pinMode(JOYBUTTON, INPUT_PULLUP);
   pinMode(LEDPIN, OUTPUT);
   Location::Init();
   start_pos = bno.getVector(Adafruit_BNO055::VECTOR_EULER).x();
 
   #if DEBUG_ENABLED
-    Serial.println("Initialized");
+  Serial.println("Initialized");
   #endif
 }
 
-void test() {
-  drive(100, 0, 0, 0);
-  delay(3000);
-  drive(0, 100, 0, 0);
-  delay(3000);
-  drive(0, 0, 100, 0);
-  delay(3000);
-  drive(0, 0, 0, 100);
-  delay(3000);  
-}
-
-void test2(){
-  int isLift, acceleration;
-  Serial.println("Ready?");
-  delay(3000);
-
-  Serial.println("GO!");
-  for(int i = 0; i < 5000; i++){
-    
-
-      
-
-    //Serial.println(isLifted());
-    //delay(100);
-  }
-  
-}
-
-void loop() {
+void loop() {  
+  getRings();
   startToMid();
   midToGap1();
-  gap1ToPickup();
-  pickupToGap2();
-  gap2ToScore();
-  score();
+  gap1ToScore();
+  deposit();
+  scoreToGap2();
+  gap2ToPickup();
+
 }
+
+void getRings() {
+  encoderModeY(BACKWARD, 300);
+  dumper[LEFT].writeMicroseconds(850);
+  dumper[RIGHT].writeMicroseconds(850);
+  waitForPickup();
+  waitForPickup();
+ /*
+  * Pickup Rings
+  */
+  encoderModeY(FORWARD, 500);
+  pickup(&grabber[MIDDLE]);
+  waitForPickup();
+  encoderModeY(BACKWARD, 400);
+
+
+
+
+  pickup(&grabber[LEFT]);
+  pickup(&grabber[RIGHT]);
+
+  dumper[LEFT].writeMicroseconds(0);  // 0 is up
+  dumper[RIGHT].writeMicroseconds(0);  // 0 is up
+ 
+  for (int i = 0; i < 1500; i++) {
+    irMode(0, FORWARD, FORWARD);
+  }  
+}
+
 
 void startToMid() {
   Location::resetEncoders();
-
+  
   // move to mid wall
-  while(Location::getEncodery() < 6500) {
-    irMode(-250);
-  }
+  while(Location::getEncodery() < 500)  irMode(-70);
+  while(Location::getEncodery() < 1500) irMode(-150);
+  while(Location::getEncodery() < 3200) irMode(-250);
+  while(Location::getEncodery() < 6000)  irMode(-80);
   // stop when at wall
   brake();
-  delay(1500);    // TODO: Flip Multiplier Here
 }
 
 void midToGap1() {
   int isLift;
   Vector<3> euler = bno.getVector(Adafruit_BNO055::VECTOR_EULER);
   // move away from wall and line up with gap1
-  encoderModeY(FORWARD, 550);
+  encoderModeY(FORWARD, 150);
 
   // change rotation by 90 degrees to face scoring pegs
   start_pos += 270;
   for (int i = 0; i < 1250; i++)
     gyroMode(0, 0);  
 
+  encoderModeX(BACKWARD, 300);
+  
   tilt = euler.y();
+  Serial.print("Permatilt = ");
+  Serial.println(tilt);
   
   // move from mid to wall (through gap)
   Location::resetEncoders();
   while(Location::getEncodery() < 9000) {
-    isLift = isLifted();
-    if(abs(isLift) > 0){
-      gyroMode(isLifted(), isLifted());
+   /* isLift = isLifted();
+    if(abs(isLift) > 0) {
+      gyroMode(isLift, isLift);
       umph = true;
     }
-    else
+    else*/
       gyroMode(0, 150); 
     
     Vector<3> acceleration = bno.getVector(Adafruit_BNO055::VECTOR_LINEARACCEL); 
@@ -123,7 +142,7 @@ void midToGap1() {
         break;
       else{
         umph = true;
-        for(int i = 0; i < 300; i++)
+        for(int i = 0; i < 500; i++)
           gyroMode(120, 120);
       }
     }
@@ -131,43 +150,54 @@ void midToGap1() {
   
   brake();
   if(umph){
-    for(int i = 0; i < 700; i++)
-      gyroMode(0, 150);
+    for(int i = 0; i < 300; i++)
+      gyroMode(-120, 150);
+    //reset things for next run
+    umph = false;
   }
   brake();
 }
 
-void gap1ToPickup() {
- /*
-  * Backup to get space to drop
-  */
-  Location::resetEncoders();
-  while(Location::getEncodery() < 300){
-    gyroMode(-120, -100);
-  }
-  
+void gap1ToScore() {
  /*
   * Drive to the scoring pegs
   */
-  encoderModeX(BACKWARD, 2100);
-  brake();                                                // straightening out here???!!
-  for (int i = 0; i < 2300; i++) {
+  encoderModeX(BACKWARD, 1000);
+  for (int i = 0; i < 2500; i++) {
     irMode(0, BACKWARD, BACKWARD);
   }
-  brake();
-  
-  //reset things
-  umph = false;
+  brake();  
 }
 
-void pickupToGap2() {
+void deposit() {
+  encoderModeY(BACKWARD, 220);
+  brake();
+  waitForPickup();
+  dumper[LEFT].writeMicroseconds(1130);  // 0 is up
+  dumper[RIGHT].writeMicroseconds(1130);  // 0 is up
+  waitForPickup();
+  
+  encoderModeY(FORWARD, 10);
+  encoderModeY(BACKWARD, 10);
+
+  
+  encoderModeY(BACKWARD, 420);
+}
+
+void scoreToGap2() {
  /*
   * Move Left to the gap
   */
-  encoderModeX(BACKWARD, 1900);               //G2  
+  encoderModeX(BACKWARD, 2200);               //G2
+  grabber[LEFT].writeMicroseconds(3000);
+  grabber[MIDDLE].writeMicroseconds(3000);
+  grabber[RIGHT].writeMicroseconds(3000);
+  dumper[LEFT].writeMicroseconds(3000);  // 0 is up
+  dumper[RIGHT].writeMicroseconds(3000);  // 0 is up
+
 }
 
-void gap2ToScore() {
+void gap2ToPickup() {
   int isLift;
   Vector<3> euler = bno.getVector(Adafruit_BNO055::VECTOR_EULER);
   tilt = euler.y();
@@ -177,8 +207,8 @@ void gap2ToScore() {
 */
   // move from wall to mid (through gap)
   Location::resetEncoders();
-  while(Location::getEncodery() < 8400) {
-    isLift = isLifted();
+  while(Location::getEncodery() < 7000) {
+    /*isLift = isLifted();
     Vector<3> acceleration = bno.getVector(Adafruit_BNO055::VECTOR_LINEARACCEL); 
     int accelY = abs(acceleration.y());
     if(abs(isLift) > 0){
@@ -190,36 +220,37 @@ void gap2ToScore() {
         for(int i = 0; i < 300; i++)
           gyroMode(-120, -120);
     }
-    else{
+    else{*/
       gyroMode(0, -120);
-    }
+    //}
   }
   brake();    
   
   if(umph){
     for(int i = 0; i < 200; i++)
       gyroMode(0, -120);
+    //reset things for next run
+    umph = false;
   }  
-}
 
-void score() {
  /* 
   * change rotation by 90 degrees to face scoring pegs
   */
   start_pos += 90;
   for (int i = 0; i < 1200; i++)
     gyroMode(0, 0);
-  
-  for (int i = 0; i < 1500; i++) {
+
+  for (int i = 0; i < 2500; i++) {
     irMode(0, BACKWARD, BACKWARD);
   }
   brake();
   
- /*
-  * Pickup Rings
-  */
-  encoderModeY(FORWARD, 1000);
-  delay(2000);  
+  for (int i = 0; i < 500; i++)
+    gyroMode(0, 0);
+}
+
+void waitForPickup() {
+  delay(1000);
 }
 
 void serialDo() {
@@ -337,15 +368,18 @@ void drive(int m1, int m2, int m3, int m4){
   hm[1]->drive(m2, m2 > 0 ? FORWARD : BACKWARD);
   hm[2]->drive(m3, m3 > 0 ? FORWARD : BACKWARD);
   hm[3]->drive(m4, m4 > 0 ? FORWARD : BACKWARD);
-  
 }
 
 int isLifted(){
   Vector<3> euler = bno.getVector(Adafruit_BNO055::VECTOR_EULER);
-
-  if(euler.y() - tilt < -1.5)
+  Serial.print("euY = ");
+  Serial.print(euler.y());
+  Serial.print("tilt = ");
+  Serial.println(tilt);
+  
+  if(euler.y() - tilt < -2)
     return -130;
-  else if(euler.y() - tilt > 1.5)
+  else if(euler.y() - tilt > 2)
     return 130;
   else
     return 0;
@@ -357,3 +391,14 @@ void brake(){
   hm[2]->drive(0, BRAKE);
   hm[3]->drive(0, BRAKE);
 }
+
+void dropoff(Servo* servo) {
+  servo->writeMicroseconds(2000); //3000 is down
+  // Takes 500 ms to react
+}
+
+void pickup(Servo* servo) {
+  servo->writeMicroseconds(900);  // 0 is up
+  // Takes 500 ms to react
+}
+
