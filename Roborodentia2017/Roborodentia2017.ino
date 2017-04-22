@@ -12,8 +12,8 @@ HMotor hmotor3(52, 53, 5);
 HMotor hmotor4(24, 25, 3);
 HMotor *hm[MOTORCOUNT] = {&hmotor1, &hmotor2, &hmotor3, &hmotor4};
 Adafruit_BNO055 bno = Adafruit_BNO055();
-//Servo grabber[3];
-//Servo dumper[2];
+Servo grabber[3];
+Servo dumper[2];
 //Servo flapper;
 using namespace imu;
 int start_pos = 0;  // start_pos must be positive always, never negative or it will freak out
@@ -26,18 +26,18 @@ void setup() {
   Serial.println("Initializing");
   #endif
 
-  //grabber[LEFT].attach(9);
-  //grabber[MIDDLE].attach(10);
-  //grabber[RIGHT].attach(8);
-  //dumper[LEFT].attach(11);
-  //dumper[RIGHT].attach(12);
+  grabber[LEFT].attach(9);
+  grabber[MIDDLE].attach(10);
+  grabber[RIGHT].attach(8);
+  dumper[LEFT].attach(11);
+  dumper[RIGHT].attach(12);
   //flapper.attach(13);
   // 3000 is down, 0 is up
-  //grabber[LEFT].writeMicroseconds(3000);
-  //grabber[MIDDLE].writeMicroseconds(3000);
-  //grabber[RIGHT].writeMicroseconds(3000);
-  //dumper[LEFT].writeMicroseconds(3000);
-  //dumper[RIGHT].writeMicroseconds(3000);
+  grabber[LEFT].writeMicroseconds(3000);
+  grabber[MIDDLE].writeMicroseconds(3000);
+  grabber[RIGHT].writeMicroseconds(3000);
+  dumper[LEFT].writeMicroseconds(3000);
+  dumper[RIGHT].writeMicroseconds(3000);
   //flapper.writeMicroseconds(3000);
   
   if(!bno.begin())
@@ -54,43 +54,144 @@ void setup() {
   Serial.println("Initialized");
   #endif
 }
-void test(){
-  midToGap1();
-  delay(3000);
-}
+
+
 
 void loop() {
   getRings();
+  
+  while(Location::getEncodery() < 1500) irMode(-150);
+  start_pos += 90;
+    for (int i = 0; i < 1350; i++)
+      gyroMode(0, 0);  
+
+  while(!irMode(0, BACKWARD, BACKWARD));
+  brake();
+
+  boolean* ir;
+  do{
+    irMode(255);
+    ir = Location::updateInfrared();
+  }while(!(ir[0] & ir[2]));
+  brake();
+
+  //Location::resetEncoders();
+ // while(Location::getEncodery() < 100) irMode(120);
+
+  pickup(&grabber[RIGHT], 200);
+  brake();
+  for(int i = 0; i < 200; i++){
+    irMode(0);
+  }
+  deposit();
+  
+  delay(1000);
+
+  do{
+    irMode(-255);
+    ir = Location::updateInfrared();
+  }while(!(ir[3] & ir[5]));
+  brake();
+  
+  Location::resetEncoders();
+  while(Location::getEncodery() < 1500) irMode(-150);
+  brake();
+
+    
+  while(Location::getEncodery() < 1500) irMode(-150);
+  start_pos -= 90;
+    for (int i = 0; i < 1350; i++)
+      gyroMode(0, 0);  
+
+  brake();
+  while(!irMode(0, BACKWARD, BACKWARD));
+  brake();
+
+  dumper[LEFT].writeMicroseconds(880);
+  dumper[RIGHT].writeMicroseconds(880);
+
+  grabber[LEFT].writeMicroseconds(3000);
+  grabber[MIDDLE].writeMicroseconds(3000);
+  grabber[RIGHT].writeMicroseconds(3000);
+
+  
+  encoderModeX(BACKWARD, 40);
+  do{
+    irMode(110);
+    ir = Location::updateInfrared();
+  }while(!(ir[0] & ir[2]));
+  brake();
+
+  Location::resetEncoders();
+  while(Location::getEncodery() < 100) irMode(-120);
+  
+
+
+  /*
   startToMid();
   midToGap1();
   gap1ToScore();
   deposit();
   scoreToGap2();
   gap2ToPickup();
+  */
+  //delay(3000);
 }
 
 void getRings() {
-  encoderModeY(BACKWARD, 300);
-  //dumper[LEFT].writeMicroseconds(880);
-  //dumper[RIGHT].writeMicroseconds(880);
+  encoderModeX(BACKWARD, 40);
+  Location::resetEncoders();
+  while(Location::getEncodery() < 200) irMode(-120);
+  //encoderModeY(BACKWARD, 300);
+  brake();
+  dumper[LEFT].writeMicroseconds(880);
+  dumper[RIGHT].writeMicroseconds(880);
   waitForPickup();
   waitForPickup();
  /*
   * Pickup Rings
   */
-  encoderModeY(FORWARD, 500);
-  //pickup(&grabber[MIDDLE]);
+  encoderModeY(FORWARD, 400);
+  pickup(&grabber[MIDDLE]);
   waitForPickup();
-  encoderModeY(BACKWARD, 400);
+  encoderModeY(BACKWARD, 500);
+  brake();
 
+  dumper[LEFT].writeMicroseconds(0);  // 0 is up
+  dumper[RIGHT].writeMicroseconds(0);  // 0 is up
+  delay(1000);
+  dumper[LEFT].writeMicroseconds(880);
+  dumper[RIGHT].writeMicroseconds(880);
+  
+  delay(1000);
+  encoderModeX(FORWARD, 400);
+  brake();    
+  for (int i = 0; i < 400; i++)
+    gyroMode(0, 0);
+  encoderModeY(FORWARD, 500);
+  pickup(&grabber[RIGHT], 400);
+  waitForPickup();
+  encoderModeY(BACKWARD, 500);
 
-
-
-  //pickup(&grabber[LEFT]);
-  //pickup(&grabber[RIGHT]);
-
-  //dumper[LEFT].writeMicroseconds(0);  // 0 is up
-  //dumper[RIGHT].writeMicroseconds(0);  // 0 is up
+  dumper[LEFT].writeMicroseconds(0);  // 0 is up
+  dumper[RIGHT].writeMicroseconds(0);  // 0 is up
+  delay(1000);
+  dumper[LEFT].writeMicroseconds(880);
+  dumper[RIGHT].writeMicroseconds(880);
+  
+  encoderModeX(BACKWARD, 1100);
+  brake();
+  for (int i = 0; i < 400; i++)
+    gyroMode(0, 0);
+  encoderModeY(FORWARD, 500);
+  pickup(&grabber[LEFT]);
+  waitForPickup();
+  encoderModeY(BACKWARD, 500);
+  
+  dumper[LEFT].writeMicroseconds(0);  // 0 is up
+  dumper[RIGHT].writeMicroseconds(0);  // 0 is up
+  
+  delay(1000);
  
   for (int i = 0; i < 1500; i++) {
     irMode(0, FORWARD, FORWARD);
@@ -172,20 +273,24 @@ void gap1ToScore() {
 }
 
 void deposit() {
-  encoderModeY(BACKWARD, 220);
+  encoderModeY(BACKWARD, 330);
   brake();
   waitForPickup();
-  //dumper[LEFT].writeMicroseconds(1130);  // 0 is up
-  //dumper[RIGHT].writeMicroseconds(1130);  // 0 is up
+  dumper[LEFT].writeMicroseconds(1130);  // 0 is up
+  dumper[RIGHT].writeMicroseconds(1130);  // 0 is up
   waitForPickup();
   
-  encoderModeY(FORWARD, 10);
-  encoderModeY(BACKWARD, 10);
-
+  encoderModeY(FORWARD, 30);
+  encoderModeY(BACKWARD, 30);
+  encoderModeY(FORWARD, 30);
+  encoderModeY(BACKWARD, 30);
+  encoderModeY(FORWARD, 30);
+  encoderModeY(BACKWARD, 30);
+/*
   for(int i = 0; i < 400; i++)
     gyroMode(0, 0);
   encoderModeY(BACKWARD, 300);
-
+*/
 }
 
 void scoreToGap2() {
@@ -384,3 +489,8 @@ void pickup(Servo* servo) {
   servo->writeMicroseconds(900);  // 0 is up
   // Takes 500 ms to react
 }
+
+void pickup(Servo* servo, int add){
+  servo->writeMicroseconds(900 - add);  // 0 is up
+}
+
